@@ -24,6 +24,7 @@ class State(TypedDict):
     human_feedback: Annotated[list[str], add_messages]
     slides: Annotated[list[str], add_messages]
     evaluation: Annotated[list[str], add_messages]
+    approved: bool
 
 
 def task_planning_agent(state: State):
@@ -309,21 +310,34 @@ def is_completion_command(text):
 
 def human_feedback_node(state: State):
     """Human intervention node for providing feedback on the outline."""
-    print("\n[human_feedback_node] Awaiting human feedback...")
+    print("\n" + "="*50)
+    print("[human_feedback_node] Awaiting human feedback...")
+    print("="*50)
 
-    recommend_outline = state["recommend_outline"]
+    current_outline = state["recommend_outline"][-1] if state["recommend_outline"] else "No outline available"
+    
+    # Print the outline for the user to see clearly
+    print(f"\nCurrent Outline:\n{current_outline}\n")
 
-    user_feedback = interrupt(
-        {"recommend_outline": recommend_outline, "message": "Provide feedback on the outline or let me know when you're satisfied."})
+    # Get direct input from the user instead of using interrupt
+    print("\n" + "-"*50)
+    print("FEEDBACK REQUIRED")
+    print("-"*50)
+    user_feedback = input("Your feedback: ")
+    print("-"*50 + "\n")
+    
     print(f"[human_feedback_node] Received human feedback: {user_feedback}")
 
-    # Check if user indicates they're done using the completion command function
+    # Check if user indicates they're done
     if is_completion_command(user_feedback):
         print("[human_feedback_node] User indicated completion. Moving to slide creation.")
-        return {"human_feedback": state.get("human_feedback", []) + ["Approved outline"]}
+        # Set a flag in state to force slide creation
+        state["approved"] = True
+        return {"human_feedback": state.get("human_feedback", []) + ["Approved outline"], "approved": True}
 
-    # Otherwise, update feedback and return for re-generation
-    return {"human_feedback": state.get("human_feedback", []) + [user_feedback]}
+    # Add user feedback with a clear marker that it's not an approval
+    print("[human_feedback_node] User provided additional feedback. Returning to outline creation.")
+    return {"human_feedback": state.get("human_feedback", []) + [f"Additional feedback: {user_feedback}"]}
 
 
 def end_node(state: State):
@@ -347,6 +361,14 @@ graph_builder.add_edge("task_planning_agent", "recommend_outline_agent")
 
 # Replace direct edges with conditional logic
 def route_after_human_feedback(state):
+    # Print full state for debugging
+    print(f"\n[DEBUG] Full state keys: {state.keys()}")
+    
+    # First, explicitly check for "approved" flag which will override other checks
+    if "approved" in state and state["approved"]:
+        print("[route_after_human_feedback] Explicitly approved flag found. Routing to slide creation.")
+        return "slide_creating_agent"
+    
     # Check the latest feedback
     if "human_feedback" in state and state["human_feedback"]:
         latest_feedback = state["human_feedback"][-1]
@@ -362,9 +384,11 @@ def route_after_human_feedback(state):
         if "Approved outline" in feedback_content:
             print("[route_after_human_feedback] Routing to slide creation")
             return "slide_creating_agent"
-        # Otherwise, route back to outline recommendation
-        print(f"[route_after_human_feedback] Routing back to outline recommendation")
+        
+        # Otherwise, route back to outline recommendation (this always happens if not approved)
+        print(f"[route_after_human_feedback] User did not approve. Routing back to outline recommendation")
         return "recommend_outline_agent"
+    
     # Default case - route back to outline recommendation
     print("[route_after_human_feedback] No feedback found, routing to outline recommendation")
     return "recommend_outline_agent"
@@ -380,15 +404,33 @@ graph = graph_builder.compile(checkpointer=checkpointer)
 
 thread_config = {"configurable": {"thread_id": uuid.uuid4()}}
 research_topic = input("Enter your research topic: ")
-initial_state = {"research_topic": research_topic, "recommend_outline": [], "human_feedback": [], "slides": [], "evaluation": []}
+initial_state = {
+    "research_topic": research_topic, 
+    "recommend_outline": [], 
+    "human_feedback": [], 
+    "slides": [], 
+    "evaluation": [],
+    "approved": False  # Initialize as not approved
+}
 
 try:
-    for chunk in graph.stream(initial_state, config=thread_config):
-        for node_id, value in chunk.items():
-            if node_id == "__interrupt__":
-                user_feedback = input("Provide feedback or let me know when you're satisfied with the results: ")
-                graph.invoke(Command(resume=user_feedback), config=thread_config)
+    print("\n========== PRESENTATION GENERATOR ==========")
+    print("Starting workflow process. You will be prompted for input when needed.\n")
+    
+    # Direct execution without using stream
+    result = graph.invoke(initial_state, config=thread_config)
+    
+    print("\n" + "="*50)
+    print("WORKFLOW COMPLETED SUCCESSFULLY")
+    print("="*50)
+    
+    print("\nFinal presentation has been generated.")
+    
 except Exception as e:
-    print(f"An error occurred: {e}")
+    print(f"\n[ERROR] An error occurred during execution: {str(e)}")
+    import traceback
+    traceback.print_exc()
+    
+    # Exit with error code
     import os
     os._exit(1)

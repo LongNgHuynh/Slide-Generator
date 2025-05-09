@@ -161,6 +161,9 @@ dmypy.json
 #images
 /data
 
+# HTML generate files
+*.html
+
 #json output files
 *.json
 
