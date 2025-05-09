@@ -18,7 +18,6 @@ llm = GPT_4o()
 research_tools = [image_search_tool, web_search_tool, crawl_tool]
 
 class State(TypedDict):
-    """Graph state containing research topic, generated content, and human feedback."""
     research_topic: str
     recommend_outline: Annotated[list[str], add_messages]
     human_feedback: Annotated[list[str], add_messages]
@@ -28,15 +27,12 @@ class State(TypedDict):
 
 
 def task_planning_agent(state: State):
-    """Initial task planning agent that sets up the research process."""
     print("\n[task_planning_agent] Starting task planning process...")
     topic = state["research_topic"]
     
-    # Check if there's previous evaluation feedback to incorporate
     previous_evaluation = state["evaluation"][-1] if "evaluation" in state and state["evaluation"] else "No previous evaluation"
     has_previous_evaluation = previous_evaluation != "No previous evaluation"
     
-    # Prepare evaluation section conditionally
     evaluation_section = ""
     if has_previous_evaluation:
         evaluation_section = f"""
@@ -44,7 +40,6 @@ def task_planning_agent(state: State):
     {previous_evaluation}
     """
     
-    # Prepare improvements point conditionally
     improvements_point = ""
     if has_previous_evaluation:
         improvements_point = "5. Improvements based on the previous evaluation feedback"
@@ -72,7 +67,6 @@ def task_planning_agent(state: State):
         print(f"[task_planning_agent] Generated task plan")
         print(task_plan)
         
-        # Move to outline recommendation
         return {"recommend_outline": [task_plan]}
     except Exception as e:
         print(f"Error in task planning: {e}")
@@ -80,7 +74,6 @@ def task_planning_agent(state: State):
 
 
 def recommend_outline_agent(state: State):
-    """Uses GPT-4o to generate a presentation outline based on a research topic with human feedback incorporated."""
     print("\n[recommend_outline_agent] Generating presentation outline...")
     topic = state["research_topic"]
     task_plan = state["recommend_outline"][-1] if state["recommend_outline"] else "No task plan available"
@@ -138,18 +131,14 @@ def recommend_outline_agent(state: State):
 
 
 def slide_creating_agent(state: State):
-    """Creates actual presentation slides based on the approved outline."""
     print("\n[slide_creating_agent] Creating presentation slides...")
     
-    # Get the latest outline from the state
     current_outline = state["recommend_outline"][-1] if state["recommend_outline"] else ""
     feedback = state["human_feedback"][-1] if "human_feedback" in state and state["human_feedback"] else "No feedback available"
     research_topic = state["research_topic"]
     
-    # Create list of tools including presentation_tool
     slide_tools = [presentation_tool]
     
-    # First, create an introduction to the presentation task for the agent
     intro_prompt = f"""
     You are tasked with creating a comprehensive presentation on "{research_topic}".
     You will need to create approximately 10-15 slides covering this topic.
@@ -230,7 +219,6 @@ def slide_creating_agent(state: State):
         slide_content = result.get("output", "No output generated")
         print(f"[slide_creating_agent] Generated slides")
         
-        # Return the path to the complete presentation
         complete_presentation_path = os.path.join(os.getcwd(), "generated_slides", "complete_presentation.html")
         if os.path.exists(complete_presentation_path):
             return {"slides": [f"Complete presentation generated successfully at: {complete_presentation_path}\n\n{slide_content}"]}
@@ -242,14 +230,11 @@ def slide_creating_agent(state: State):
 
 
 def slide_evaluating_agent(state: State):
-    """Evaluates the quality of the created slides and provides improvement suggestions."""
     print("\n[slide_evaluating_agent] Evaluating presentation slides...")
     
-    # Get the latest slides from the state
     current_slides = state["slides"][-1] if state["slides"] else ""
     original_outline = state["recommend_outline"][-1] if state["recommend_outline"] else ""
     
-    # Create prompt for slide evaluation
     evaluation_prompt = f"""
     As a Slide Evaluating Agent, review these presentation slides against the original outline.
     
@@ -287,7 +272,6 @@ def slide_evaluating_agent(state: State):
 
 
 def is_completion_command(text):
-    """Use LLM to determine if the user input indicates they're done providing feedback."""
     prompt = f"""
     I need to determine if the following user input indicates they are finished providing feedback 
     and want to complete the current process. The user has been asked to provide feedback on a
@@ -309,17 +293,14 @@ def is_completion_command(text):
 
 
 def human_feedback_node(state: State):
-    """Human intervention node for providing feedback on the outline."""
     print("\n" + "="*50)
     print("[human_feedback_node] Awaiting human feedback...")
     print("="*50)
 
     current_outline = state["recommend_outline"][-1] if state["recommend_outline"] else "No outline available"
     
-    # Print the outline for the user to see clearly
     print(f"\nCurrent Outline:\n{current_outline}\n")
 
-    # Get direct input from the user instead of using interrupt
     print("\n" + "-"*50)
     print("FEEDBACK REQUIRED")
     print("-"*50)
@@ -328,20 +309,16 @@ def human_feedback_node(state: State):
     
     print(f"[human_feedback_node] Received human feedback: {user_feedback}")
 
-    # Check if user indicates they're done
     if is_completion_command(user_feedback):
         print("[human_feedback_node] User indicated completion. Moving to slide creation.")
-        # Set a flag in state to force slide creation
         state["approved"] = True
         return {"human_feedback": state.get("human_feedback", []) + ["Approved outline"], "approved": True}
 
-    # Add user feedback with a clear marker that it's not an approval
     print("[human_feedback_node] User provided additional feedback. Returning to outline creation.")
     return {"human_feedback": state.get("human_feedback", []) + [f"Additional feedback: {user_feedback}"]}
 
 
 def end_node(state: State):
-    """Final node that terminates the process"""
     print("\n[end_node] Process finished.")
     print("Final Slides:", state["slides"][-1] if "slides" in state and state["slides"] else "No slides generated")
     print("Final Evaluation:", state["evaluation"][-1] if "evaluation" in state and state["evaluation"] else "No evaluation available")
@@ -359,20 +336,15 @@ graph_builder.add_node("end_node", end_node)
 graph_builder.set_entry_point("task_planning_agent")
 graph_builder.add_edge("task_planning_agent", "recommend_outline_agent")
 
-# Replace direct edges with conditional logic
 def route_after_human_feedback(state):
-    # Print full state for debugging
     print(f"\n[DEBUG] Full state keys: {state.keys()}")
     
-    # First, explicitly check for "approved" flag which will override other checks
     if "approved" in state and state["approved"]:
         print("[route_after_human_feedback] Explicitly approved flag found. Routing to slide creation.")
         return "slide_creating_agent"
     
-    # Check the latest feedback
     if "human_feedback" in state and state["human_feedback"]:
         latest_feedback = state["human_feedback"][-1]
-        # Check if this is a message object with a content field
         if hasattr(latest_feedback, 'content'):
             feedback_content = latest_feedback.content
         else:
@@ -380,20 +352,16 @@ def route_after_human_feedback(state):
             
         print(f"[route_after_human_feedback] Processing feedback: {feedback_content}")
         
-        # If the feedback was "Approved outline", route to slide creation
         if "Approved outline" in feedback_content:
             print("[route_after_human_feedback] Routing to slide creation")
             return "slide_creating_agent"
         
-        # Otherwise, route back to outline recommendation (this always happens if not approved)
         print(f"[route_after_human_feedback] User did not approve. Routing back to outline recommendation")
         return "recommend_outline_agent"
     
-    # Default case - route back to outline recommendation
     print("[route_after_human_feedback] No feedback found, routing to outline recommendation")
     return "recommend_outline_agent"
 
-# Connect nodes with proper conditional routing
 graph_builder.add_edge("recommend_outline_agent", "human_feedback_node")
 graph_builder.add_conditional_edges("human_feedback_node", route_after_human_feedback)
 graph_builder.add_edge("slide_creating_agent", "slide_evaluating_agent")
@@ -410,14 +378,13 @@ initial_state = {
     "human_feedback": [], 
     "slides": [], 
     "evaluation": [],
-    "approved": False  # Initialize as not approved
+    "approved": False
 }
 
 try:
     print("\n========== PRESENTATION GENERATOR ==========")
     print("Starting workflow process. You will be prompted for input when needed.\n")
     
-    # Direct execution without using stream
     result = graph.invoke(initial_state, config=thread_config)
     
     print("\n" + "="*50)
@@ -431,6 +398,5 @@ except Exception as e:
     import traceback
     traceback.print_exc()
     
-    # Exit with error code
     import os
     os._exit(1)
