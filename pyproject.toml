@@ -24,6 +24,7 @@ dependencies = [
     "httpcore==1.0.7",
     "httpx==0.28.1",
     "idna==3.10",
+    "ipykernel>=6.29.5",
     "ipython==8.35.0",
     "jedi==0.19.2",
     "jiter==0.9.0",

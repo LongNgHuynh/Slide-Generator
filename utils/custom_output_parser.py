@@ -37,6 +37,43 @@ class CustomOutputParser(AgentOutputParser):
         action = match.group(1).strip()
         action_input = match.group(2).strip()
         
+        # Special handling for generate_presentation_outline tool
+        if action == "generate_presentation_outline":
+            try:
+                # Try to parse as JSON if it looks like JSON
+                if action_input.strip().startswith('{') and action_input.strip().endswith('}'):
+                    try:
+                        json_input = json.loads(action_input)
+                        return AgentAction(
+                            tool=action,
+                            tool_input={
+                                "topic": json_input.get("topic", ""),
+                                "instructions": json_input.get("instructions", "Create a detailed presentation outline")
+                            },
+                            log=llm_output
+                        )
+                    except json.JSONDecodeError:
+                        pass
+                
+                # If not JSON, try to extract topic from text
+                topic_match = re.search(r'topic=[\'"]?([^\'"]+)[\'"]?', action_input)
+                instructions_match = re.search(r'instructions=[\'"]?([^\'"]+)[\'"]?', action_input)
+                
+                topic = topic_match.group(1) if topic_match else action_input
+                instructions = instructions_match.group(1) if instructions_match else "Create a detailed presentation outline"
+                
+                return AgentAction(
+                    tool=action,
+                    tool_input={
+                        "topic": topic,
+                        "instructions": instructions
+                    },
+                    log=llm_output
+                )
+            except Exception as e:
+                logger.error(f"Error parsing generate_presentation_outline input: {e}")
+                # Fall back to normal parsing
+        
         # Special handling for generate_presentation tool
         if action == "generate_presentation":
             try:
@@ -58,7 +95,9 @@ class CustomOutputParser(AgentOutputParser):
                             tool_input={
                                 "slide_number": json_input.get("slide_number"),
                                 "title": json_input.get("title", ""),
-                                "content": json_input.get("content", "")
+                                "content": [json_input.get("content", "")] if isinstance(json_input.get("content", ""), str) else json_input.get("content", []),
+                                "layout": json_input.get("layout", "default"),
+                                "style": json_input.get("style", "bg-white text-black")
                             },
                             log=llm_output
                         )
@@ -75,7 +114,9 @@ class CustomOutputParser(AgentOutputParser):
                             tool_input={
                                 "slide_number": int(slide_number_match.group(1)),
                                 "title": title_match.group(1),
-                                "content": content_match.group(1)
+                                "content": [content_match.group(1)],
+                                "layout": "default",
+                                "style": "bg-white text-black"
                             },
                             log=llm_output
                         )

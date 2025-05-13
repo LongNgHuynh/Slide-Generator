@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from utils.search import Searxng
-from models.LLMs import GPT_4o
+from models.LLMs import GPT_4o, GPT_o3
 from langchain.tools import StructuredTool
 from pydantic import BaseModel
 import requests
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 OUTPUT_DIR = os.path.join(os.getcwd(), "semi_output")
 GENERATED_SLIDES_DIR = os.path.join(os.getcwd(), "generated_slides")
 LLM = GPT_4o()
+gpt_o3 = GPT_o3()
 
 # Create output directories if they don't exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -29,10 +30,16 @@ class SearchQuery(BaseModel):
 class UrlQuery(BaseModel):
     url: str
     
+class PresentationOutlineQuery(BaseModel):
+    topic: str
+    instructions: str
+
 class PresentationQuery(BaseModel):
     slide_number: int
     title: str
-    content: str
+    content: list[str]
+    layout: str
+    style: str
 
 
 def image_search(search_query: str, searcher: Searxng = Searxng()) -> list[dict]:
@@ -138,7 +145,23 @@ def crawl_url(url: str) -> str:
         logger.error(f"Error in crawl_url: {str(e)}")
         return "Failed to crawl the URL"
     
-def generate_presentation(slide_number: int, title: str, content: str) -> str:
+def generate_presentation_outline(topic: str, instructions: str) -> str:
+    """
+    Generate a presentation outline based on a topic and instructions.
+    
+    Args:
+        topic: The topic of the presentation
+        instructions: The instructions for the presentation
+    """
+    prompt = f"""
+    Generate a presentation outline for the following topic: {topic}
+    The presentation should follow these instructions: {instructions}
+    """
+    response = LLM.invoke(prompt)
+    return response.content
+            
+
+def generate_presentation(slide_number: int, title: str, content: list[str], layout: str, style: str) -> str:
     """
     Generate a single HTML slide and save it to the file system.
     
@@ -146,7 +169,8 @@ def generate_presentation(slide_number: int, title: str, content: str) -> str:
         slide_number: The slide number (integer)
         title: The slide title
         content: The content for the slide
-        
+        layout: The layout for the slide
+        style: The design style for the slide using tailwind css
     Returns:
         String with information about the generated slide
     """
@@ -182,17 +206,15 @@ def generate_presentation(slide_number: int, title: str, content: str) -> str:
             
         presentation_prompt = f"""
         Create a single HTML slide about {title}. 
-        Use this content for the slide: {content}
+        Use this content for the slide, improve idea on it: {content}
         
-        The slide should be in the following format:
-        {html_rules}
+        The slide should be designed with the following layout: {layout}
         
-        Return only the complete HTML code for this single slide.
-        The HTML must be complete and ready to use, including all necessary styles and scripts.
+        Create slide presentation with tailwind css for artiristic like slidego template, make it look minimalistic and concise, but in details.
         """
         
         # Get the response and extract the content
-        response = LLM.invoke(presentation_prompt)
+        response = gpt_o3.invoke(presentation_prompt)
         html_content = response.content if hasattr(response, 'content') else str(response)
         
         # Save individual slide
@@ -424,9 +446,16 @@ crawl_tool = StructuredTool(
     args_schema=UrlQuery
 )
 
+generate_presentation_outline_tool = StructuredTool(
+    name="generate_presentation_outline",
+    description="Generate a presentation outline. Requires a topic and instructions. Returns the outline of the presentation.",
+    func=generate_presentation_outline,
+    args_schema=PresentationOutlineQuery
+)
+    
 presentation_tool = StructuredTool(
     name="generate_presentation",
-    description="Generate an HTML presentation from the given title and content for only 1 slide. Returns the file path of the generated presentation.",
+    description="Generate an HTML presentation slide. Requires five parameters: slide_number (int), title (string), content (string), layout (string), and style (string). Returns the file path of the generated slide.",
     func=generate_presentation,
     args_schema=PresentationQuery
 )
