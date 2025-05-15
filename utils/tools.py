@@ -8,6 +8,10 @@ from pydantic import BaseModel
 import requests
 from bs4 import BeautifulSoup
 import datetime
+from typing import Optional, Annotated
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool, InjectedToolCallId
+from langgraph.types import Command
 # from typing import List, Dict
 
 # Set up logging
@@ -38,13 +42,26 @@ class PresentationQuery(BaseModel):
     slide_number: int
     title: str
     content: list[str]
+    image_url: Optional[str] = None
+    pallette_colors: list[str]
     layout: str
     style: str
 
 
-def image_search(search_query: str, searcher: Searxng = Searxng()) -> list[dict]:
+def image_search(search_query: str) -> dict:
+    """
+    Search for images based on a query.
+    
+    Args:
+        search_query: The query string to search for images
+        searcher: Searxng instance to use for searching
+        
+    Returns:
+        Dictionary with search results including image URLs
+    """
     logger.info(f"Starting image search for query: {search_query}")
     try:
+        searcher: Searxng = Searxng()
         logger.info("Fetching search results from Searxng")
         results = json.loads(
             searcher.image_search(search_query, max_results=10)
@@ -93,38 +110,88 @@ def image_search(search_query: str, searcher: Searxng = Searxng()) -> list[dict]
                     requests.Timeout, requests.TooManyRedirects) as e:
                 logger.error(f"Error checking URL {url}: {str(e)}")
                 continue
-                
-        # Save results to JSON file
-        output_file = os.path.join(OUTPUT_DIR, "images.json")
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(filtered_results, f, indent=4, ensure_ascii=False)
-        logger.info(f"Saved {len(filtered_results)} results to {output_file}")
         
+        # Create a timestamp for this search
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Create an image search record
+        image_record = {
+            "timestamp": timestamp,
+            "query": search_query,
+            "results": filtered_results
+        }
+        with open(os.path.join(OUTPUT_DIR, "image_search_record.json"), "w", encoding="utf-8") as f:
+            json.dump(image_record, f)
         logger.info(f"Image search completed. Found {len(filtered_results)} valid images")
-        return filtered_results
+        
+        return image_record
     
     except Exception as e:
         logger.error(f"Error in image_search: {str(e)}")
-        return []
+        return {"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "query": search_query, "results": []}
     
-def web_search(search_query: str, searcher: Searxng = Searxng()) -> list[str]:
+def web_search(search_query: str, ) -> dict:
+    """
+    Search for web content based on a query.
+    
+    Args:
+        search_query: The query string to search for web content
+        searcher: Searxng instance to use for searching
+        
+    Returns:
+        Dictionary with search results including URLs and content
+    """
     logger.info(f"Starting web search for query: {search_query}")
     try:
-        content = json.loads(
+        searcher: Searxng = Searxng()
+        full_results = json.loads(
             searcher.webpage_search(search_query, max_results=10)
         )["results"]
         
+        # Extract only the url, title, content, and score fields
+        filtered_results = []
+        for result in full_results:
+            filtered_result = {
+                "url": result.get("url", ""),
+                "title": result.get("title", ""),
+                "content": result.get("content", ""),
+                "score": result.get("score", 0)
+            }
+            filtered_results.append(filtered_result)
         
+        # Create a timestamp for this search
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        return content
+        # Create a search record with timestamp and query
+        search_record = {
+            "timestamp": timestamp,
+            "query": search_query,
+            "results": filtered_results
+        }
+        with open(os.path.join(OUTPUT_DIR, "web_search_record.json"), "w", encoding="utf-8") as f:
+            json.dump(search_record, f)
+            
+        return search_record
     
     except Exception as e:
         logger.error(f"Error in web_search: {str(e)}")
-        return []
+        return {"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "query": search_query, "results": []}
     
-def crawl_url(url: str) -> str:
+def crawl_url(url: str) -> dict:
+    """
+    Crawl a webpage URL to extract its text content.
+    
+    Args:
+        url: The URL of the webpage to crawl
+        
+    Returns:
+        Dictionary with the extracted content from the webpage
+    """
     logger.info(f"Starting URL crawl for: {url}")
     try:
+        # Remove any extra quotes from the URL
+        url = url.strip('"\'')
+        
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
         
@@ -140,10 +207,22 @@ def crawl_url(url: str) -> str:
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         text = ' '.join(chunk for chunk in chunks if chunk)
         
-        return text[:6000]
+        # Create a timestamp for this crawl
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Create a crawl record with timestamp and URL
+        crawl_record = {
+            "timestamp": timestamp,
+            "url": url,
+            "content": text[:6000]  # Store the first 6000 characters
+        }
+        with open(os.path.join(OUTPUT_DIR, "crawl_record.json"), "w", encoding="utf-8") as f:
+            json.dump(crawl_record, f)
+        
+        return crawl_record
     except Exception as e:
         logger.error(f"Error in crawl_url: {str(e)}")
-        return "Failed to crawl the URL"
+        return {"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "url": url, "content": "Failed to crawl the URL"}
     
 def generate_presentation_outline(topic: str, instructions: str) -> str:
     """
@@ -161,7 +240,7 @@ def generate_presentation_outline(topic: str, instructions: str) -> str:
     return response.content
             
 
-def generate_presentation(slide_number: int, title: str, content: list[str], layout: str, style: str) -> str:
+def generate_presentation(slide_number: int, title: str, content: list[str], image_url: Optional[str], pallette_colors: list[str], layout: str, style: str) -> str:
     """
     Generate a single HTML slide and save it to the file system.
     
@@ -169,6 +248,8 @@ def generate_presentation(slide_number: int, title: str, content: list[str], lay
         slide_number: The slide number (integer)
         title: The slide title
         content: The content for the slide
+        image_url: The url of the image for the slide
+        pallette_colors: List of color hex codes for the slide
         layout: The layout for the slide
         style: The design style for the slide using tailwind css
     Returns:
@@ -205,16 +286,30 @@ def generate_presentation(slide_number: int, title: str, content: list[str], lay
             """
             
         presentation_prompt = f"""
+        You are a professional presentation designer.
+        This is the html rules: {html_rules}
+        
+        Ignore all previous instructions
         Create a single HTML slide about {title}. 
         Use this content for the slide, improve idea on it: {content}
+        If there is an image_url, add it to the slide: {image_url}.
+        Using this pallette colors: {pallette_colors}
+        
+        The slide should be in style: {style}
         
         The slide should be designed with the following layout: {layout}
         
         Create slide presentation with tailwind css for artiristic like slidego template, make it look minimalistic and concise, but in details.
+        IMPORTANT:
+        If the content is short, make it 1 column, if the content is long, make it multiple columns.
+        Make html slide overlay: hidden.
+        Make the slide responsive, and big font size.
+        Make the slide look like a professional presentation.
+        As many generate token as possible.
         """
         
         # Get the response and extract the content
-        response = gpt_o3.invoke(presentation_prompt)
+        response = LLM.invoke(presentation_prompt)
         html_content = response.content if hasattr(response, 'content') else str(response)
         
         # Save individual slide
@@ -222,9 +317,6 @@ def generate_presentation(slide_number: int, title: str, content: list[str], lay
         output_path = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_number:03d}.html")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
-        
-        # Update the slide collection
-        update_slide_collection(slide_number, title, html_content)
             
         return f"Slide #{slide_number} '{title}' generated successfully. Saved to {output_path}"
     except Exception as e:
@@ -232,197 +324,6 @@ def generate_presentation(slide_number: int, title: str, content: list[str], lay
         return f"Failed to generate slide: {str(e)}"
 
 
-def update_slide_collection(slide_number: int, title: str, html_content: str) -> None:
-    """
-    Update the collection of slides by adding or updating a slide.
-    
-    Args:
-        slide_number: The slide number
-        title: The slide title
-        html_content: The HTML content of the slide
-    """
-    collection_file = os.path.join(GENERATED_SLIDES_DIR, "slides_collection.json")
-    
-    # Create or load the collection
-    if os.path.exists(collection_file):
-        try:
-            with open(collection_file, "r", encoding="utf-8") as f:
-                collection = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            # Create new collection if file is corrupted
-            collection = {"slides": [], "last_updated": ""}
-    else:
-        collection = {"slides": [], "last_updated": ""}
-    
-    # Check if this slide already exists
-    slide_exists = False
-    for i, slide in enumerate(collection["slides"]):
-        if slide.get("slide_number") == slide_number:
-            # Update existing slide
-            collection["slides"][i] = {
-                "slide_number": slide_number,
-                "title": title,
-                "html_content": html_content,
-                "file_path": f"slide_{slide_number:03d}.html"
-            }
-            slide_exists = True
-            break
-    
-    # Add new slide if it doesn't exist
-    if not slide_exists:
-        collection["slides"].append({
-            "slide_number": slide_number,
-            "title": title,
-            "html_content": html_content,
-            "file_path": f"slide_{slide_number:03d}.html"
-        })
-    
-    # Sort slides by number
-    collection["slides"].sort(key=lambda x: x.get("slide_number", 0))
-    
-    # Update timestamp
-    collection["last_updated"] = datetime.datetime.now().isoformat()
-    
-    # Save the updated collection
-    with open(collection_file, "w", encoding="utf-8") as f:
-        json.dump(collection, f, indent=2, ensure_ascii=False)
-    
-    # Generate a combined HTML file with all slides
-    generate_combined_presentation(collection["slides"])
-
-
-def generate_combined_presentation(slides: list) -> None:
-    """
-    Generate a combined HTML presentation with all slides.
-    
-    Args:
-        slides: List of slide objects
-    """
-    if not slides:
-        return
-        
-    combined_html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Complete Presentation</title>
-    <style>
-        body { 
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f5f5f5;
-        }
-        .slide-container {
-            width: 100%;
-            max-width: 900px;
-            margin: 20px auto;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            page-break-after: always;
-        }
-        .slide-header {
-            background: #4285f4;
-            color: white;
-            padding: 10px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .slide-number {
-            font-size: 14px;
-            background: rgba(255,255,255,0.2);
-            padding: 3px 8px;
-            border-radius: 12px;
-        }
-        .slide-content {
-            padding: 20px;
-            min-height: 400px;
-        }
-        h1 { margin-top: 0; }
-        @media print {
-            .slide-container {
-                page-break-after: always;
-                box-shadow: none;
-                margin: 0;
-                width: 100%;
-            }
-        }
-    </style>
-</head>
-<body>
-    <h1 style="text-align: center; padding: 20px;">Complete Presentation</h1>
-"""
-
-    # Add each slide
-    for slide in slides:
-        slide_number = slide.get("slide_number", 0)
-        title = slide.get("title", "Untitled")
-        
-        combined_html += f"""
-    <div class="slide-container">
-        <div class="slide-header">
-            <h2>{title}</h2>
-            <span class="slide-number">Slide {slide_number}</span>
-        </div>
-        <div class="slide-content">
-            {extract_slide_content(slide.get("html_content", ""))}
-        </div>
-    </div>
-"""
-
-    # Close HTML tags
-    combined_html += """
-    <script>
-        // Print button functionality could be added here
-    </script>
-</body>
-</html>
-"""
-
-    # Save combined presentation
-    combined_file_path = os.path.join(GENERATED_SLIDES_DIR, "complete_presentation.html")
-    with open(combined_file_path, "w", encoding="utf-8") as f:
-        f.write(combined_html)
-    
-    logger.info(f"Generated combined presentation with {len(slides)} slides at {combined_file_path}")
-
-
-def extract_slide_content(html_content: str) -> str:
-    """
-    Extract the main content from an HTML slide, removing unnecessary elements.
-    
-    Args:
-        html_content: Full HTML content of a slide
-        
-    Returns:
-        Cleaned HTML content
-    """
-    try:
-        # Parse HTML
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        # Find the main content
-        # This will depend on the structure of your slides, adjust as needed
-        content_div = soup.find('div', class_='content') or soup.find('div', class_='slide-content')
-        
-        if content_div:
-            return str(content_div)
-        
-        # Fallback to body content if no specific content div is found
-        body = soup.find('body')
-        if body:
-            return ''.join(str(content) for content in body.contents)
-            
-        # Last resort
-        return html_content
-        
-    except Exception as e:
-        logger.error(f"Error extracting slide content: {e}")
-        return html_content
 
 # Create structured tools with args_schema
 image_search_tool = StructuredTool(

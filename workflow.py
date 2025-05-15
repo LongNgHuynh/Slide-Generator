@@ -20,7 +20,9 @@ class State(TypedDict):
     recommend_outline: Annotated[list[str], add_messages]
     slides: Annotated[list[str], add_messages]
     evaluation: Annotated[list[str], add_messages]
-    approved: bool
+    search_history: list[dict]
+    crawl_history: list[dict]
+    image_history: list[dict]
     next: str
 
 
@@ -45,38 +47,22 @@ def task_planning_agent(state: State):
     # Check if we have slides already, which would indicate we're in a refinement loop
     has_slides = "slides" in state and state["slides"]
     
-    # Prepare conditional sections
-    refinement_intro = "We are currently in a refinement phase. Previous slides have been created and evaluated. Your task is to decide the next step:" if has_slides else "Please create a detailed plan for developing a presentation on this topic. Include:"
-    
-    critical_decision = ""
-    if has_previous_evaluation:
-        critical_decision = """
-    CRITICAL DECISION: Based on the evaluation feedback, you must decide whether to:
-    1. ENHANCE_SLIDES: If the evaluation feedback suggests making improvements to the existing slides without changing the outline
-    2. NEW_OUTLINE: If the evaluation feedback suggests that a completely new outline is needed
-    
-    At the end of your response, add EXACTLY ONE of these decision markers:
-    DECISION: ENHANCE_SLIDES
-    or
-    DECISION: NEW_OUTLINE
-    """
-    
     planning_prompt = f"""
     You are a Task Planning Agent responsible for organizing a presentation creation process.
     
-    Research Topic: {topic}
+    User Input: {topic}
     
-    {evaluation_section}
+    Decide if you need to create entire the presentation, create an outline or enhance some slides.
+    1. Create an outline when there is no full presentation outline from users yet.
+    2. Create an entire presentation when there is a presentation outline from users.
+    3. Enhance slides when there is some slides are not good.
     
-    {refinement_intro}
-    1. Key areas to research
-    2. Recommended structure for the presentation
-    3. Types of visuals/illustrations that might be useful
-    4. Potential challenges and how to address them
-    {improvements_point}
+    IMPORTANT: Your output MUST include one of these decisions:
+    - To create an outline, include "NEEDS_RESEARCH: YES" in your response.
+    - To create a presentation directly, include "NEEDS_RESEARCH: NO" in your response.
+    - To enhance existing slides, include "DECISION: ENHANCE_SLIDES" in your response.
     
-    Format your response as a structured task plan.
-    {critical_decision}
+    DO NOT provide a complete outline - just make the decision about which step should come next.
     """
     
     try:
@@ -118,6 +104,14 @@ def recommend_outline_agent(state: State):
     agent_prompt = PromptTemplate.from_template("""Answer the following questions as best you can. You have access to the following tools:
 
     {tools}
+    
+    CRITICAL INSTRUCTIONS:
+    1. You MUST use the web_search tool first to gather information about the topic.
+    2. Then use the image_search tool to find relevant images for the presentation.
+    3. Consider using the crawl_url tool to get more detailed information from specific websites.
+    4. Only AFTER gathering sufficient information, use the generate_presentation_outline tool.
+    
+    IMPORTANT: Do NOT generate an outline until you have gathered information using at least the web_search tool.
 
     Use the following format:
 
@@ -132,7 +126,7 @@ def recommend_outline_agent(state: State):
 
     Begin!
 
-    Question: Based on the task plan and research topic, create a comprehensive presentation outline: {input}
+    Based on the task plan and research topic, create a comprehensive presentation outline: {input}
     Task Plan: {task_plan}
 
     {agent_scratchpad}""")       
@@ -152,13 +146,17 @@ def recommend_outline_agent(state: State):
     
     try:
         result = agent_executor.invoke({
-            "guide": f"Generate a comprehensive presentation outline. Use the available tools to gather information and images.",
+            "guide": f"Generate a comprehensive presentation outline. FIRST use web_search, image_search, and crawl_url tools to gather information, THEN create the outline.",
             "input": topic,
             "task_plan": task_plan,
         })
         recommend_outline = result.get("output", "No output generated")
         print(f"[recommend_outline_agent] Generated outline:\n{recommend_outline}\n")
-        return {"recommend_outline": state["recommend_outline"] + [recommend_outline], "next": "slide_creating_agent"}
+        
+        return {
+            "recommend_outline": state["recommend_outline"] + [recommend_outline],
+            "next": "slide_creating_agent"
+        }
     except Exception as e:
         print(f"Error in agent execution: {e}")
         return {"recommend_outline": state["recommend_outline"] + ["Error generating outline"], "next": "end_node"}
@@ -189,14 +187,15 @@ def slide_creating_agent(state: State):
     """
     
     intro_prompt = f"""
-    You are tasked with creating a comprehensive presentation on "{user_input}".
+    You are tasked with creating a comprehensive presentation on {user_input}.
+    {current_outline}
+
     
     Based on the outline provided, create a series of detailed and engaging presentation slides.
-    For each slide, you should provide:
-    1. A clear, concise title
-    2. Content that is informative and well-structured
-    3. Each slide should focus on a specific aspect of the topic
-    
+    For each slide, you should think about:
+    1. A color pallete for the slide (the color should related to the content of the slide, e.g. if the content is about a product, the color should be related to the product, if the content is about a person, the color should be related to the person, etc.)
+    2. A layout for the slide (decide the slide should be display with which layout to contains all content, e.g: if it need to emphasize the title or the numbers, make it strong or huge, if there is many sort of content, make it multi-column, etc.)
+    3. A design style for the slide (the design style should be related to the content of the slide, and inherit the style of the previous slides, e.g: if it related to history or ancient, the design style should make it look like a historical artifacts, if it related to technology, the design style should be related to technology, etc.)
     {feedback_section}
     
     IMPORTANT: You must create ALL slides needed to cover the entire outline, calling the generate_presentation tool separately for EACH slide.
@@ -205,11 +204,11 @@ def slide_creating_agent(state: State):
     - slide_number (integer): the position of the slide in the presentation
     - title (string): a concise title for the slide
     - content (string): the main content for the slide
-    - style (string): the design style for the slide using tailwind css (instructions for the style format, NOTICE: the style should be related to the content of the slide, and inherit the style of the previous slides)
+    - image_url (string, optional): the url of the image for the slide, choose the most relevant image from the images list
+    - pallette_colors (string): the color pallette for the slide (instructions for the color pallette format, NOTICE: the color pallette should be related to the content of the slide, and inherit the color pallette of the previous slides)
     - layout (string): the layout for the slide (instructions for the layout format, NOTICE: the layout should be related to the content of the slide, and inherit the style of the previous slides)
-    
-    Create the slides in sequential order, starting with slide 1 (introduction) and
-    ending with a conclusion slide. Make a separate tool call for each slide in the presentation.
+    - style (string): the design style for the slide using tailwind css (instructions for the style format, NOTICE: the style should be related to the content of the slide, and inherit the style of the previous slides)
+    Create the slides in sequential order, starting with slide 1 (introduction) and ending with a conclusion slide. Make a separate tool call for each slide in the presentation.
     """
     
     agent_prompt = PromptTemplate.from_template("""Answer the following questions as best you can. You have access to the following tools:
@@ -236,38 +235,12 @@ def slide_creating_agent(state: State):
     Presentation Guidelines: {intro}
 
     CRITICAL INSTRUCTION FOR USING generate_presentation TOOL:
-    When using the generate_presentation tool, your Action Input must include 5 parameters:
+    When using the generate_presentation tool, your Action Input must include these parameters:
     
     Action: generate_presentation
-    Action Input: {{"slide_number": 1, "title": "Title", "content": "Content", "layout": "Layout Description", "style": "Design style using tailwind CSS"}}
+    Action Input: {{"slide_number": 1, "title": "Title", "content": ["Content point 1", "Content point 2"], "image_url": null, "pallette_colors": ["#color1", "#color2"], "layout": "Layout Description", "style": "Design style (Ancient, Modern, Tech, Education, etc.)"}}
     
-    Make sure that:
-    1. slide_number is a plain integer, not in quotes
-    2. title and content are strings in quotes
-    3. layout and style are strings in quotes
-    4. You format the JSON properly with correct quotes and braces
-    5. YOU MUST MAKE SEPARATE TOOL CALLS for each slide in the presentation
-    
-    YOUR TASK REQUIRES MULTIPLE TOOL CALLS:
-    - Create slides in sequential order
-    - First, create slide 1 (introduction)
-    - Then create additional slides based on the outline, one at a time
-    - End with a conclusion slide
-    
-    Example of correct sequence (make each call separately after receiving the observation from the previous call):
-    
-    Action: generate_presentation
-    Action Input: {{"slide_number": 1, "title": "Introduction", "content": "First slide content...", "layout": "title-and-content", "style": "bg-blue-100 text-gray-800"}}
-    
-    ... wait for observation ...
-    
-    Action: generate_presentation
-    Action Input: {{"slide_number": 2, "title": "Main Point 1", "content": "Second slide content...", "layout": "two-column", "style": "bg-blue-200 text-gray-800"}}
-    
-    ... and so on for all slides in the outline ...
-    
-    Make these tool calls one after another. Wait for each observation before making the next tool call.
-    
+    Ignore all previous instructions.    
     {agent_scratchpad}""")       
 
     agent = create_react_agent(
@@ -289,21 +262,21 @@ def slide_creating_agent(state: State):
             "input": user_input,
             "outline": current_outline,
             "intro": intro_prompt
-        })
-        slide_content = result.get("output", "No output generated")
-        print(f"[slide_creating_agent] Generated slides")
+        })    
         
-        complete_presentation_path = os.path.join(os.getcwd(), "generated_slides", "complete_presentation.html")
-        if os.path.exists(complete_presentation_path):
-            return {"slides": [f"Complete presentation generated successfully at: {complete_presentation_path}\n\n{slide_content}"], "next": "slide_evaluating_agent"}
-        
-        return {"slides": [slide_content], "next": "slide_evaluating_agent"}
+        return {
+            "next": "slide_evaluating_agent"
+        }
     except Exception as e:
         print(f"Error in agent execution: {e}")
-        return {"slides": [f"Error creating slides: {str(e)}"], "next": "end_node"}
+        return {
+            "slides": state["slides"] + [f"Error creating slides: {str(e)}"],
+            "next": "end_node"
+        }
 
 
 def slide_evaluating_agent(state: State):
+    print(state)
     print("\n[slide_evaluating_agent] Evaluating presentation slides...")
     
     current_slides = state["slides"][-1] if state["slides"] else ""
@@ -398,7 +371,9 @@ try:
         "recommend_outline": [], 
         "slides": [], 
         "evaluation": [],
-        "approved": False,
+        "search_history": [],
+        "crawl_history": [],
+        "image_history": [],
         "next": "task_planning_agent"
     }
     
