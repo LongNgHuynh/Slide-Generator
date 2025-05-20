@@ -9,9 +9,8 @@ import requests
 from bs4 import BeautifulSoup
 import datetime
 from typing import Optional, Annotated
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool, InjectedToolCallId
-from langgraph.types import Command
+from langgraph.prebuilt import InjectedState
+from langchain.tools import tool
 # from typing import List, Dict
 
 # Set up logging
@@ -47,7 +46,7 @@ class PresentationQuery(BaseModel):
     layout: str
     style: str
 
-
+@tool
 def image_search(search_query: str) -> dict:
     """
     Search for images based on a query.
@@ -62,18 +61,20 @@ def image_search(search_query: str) -> dict:
     logger.info(f"Starting image search for query: {search_query}")
     try:
         searcher: Searxng = Searxng()
-        logger.info("Fetching search results from Searxng")
         results = json.loads(
             searcher.image_search(search_query, max_results=10)
         )["results"]
-        logger.info(f"Found {len(results)} initial results")
-        
+                
         # Extract only the required fields
         filtered_results = []
         timeout = 5
         for idx, item in enumerate(results, 1):
             url = item.get("img_src", "")
-            logger.info(f"Processing result {idx}/{len(results)}: {url}")
+            # Ensure URL has proper scheme
+            if url.startswith("//"):
+                url = "https:" + url
+            elif not url.startswith(("http://", "https://")):
+                url = "https://" + url
             try:
                 # Send a HEAD request first (faster than GET since it doesn't download the content)
                 logger.debug(f"Sending HEAD request to {url}")
@@ -84,12 +85,10 @@ def image_search(search_query: str) -> dict:
                 if response.status_code == 200:
                     content_type = response.headers.get('Content-Type', '')
                     if content_type.startswith('image/'):
-                        logger.info(f"Valid image confirmed via HEAD request: {url}")
                         is_valid_image = True
                     
                 # If HEAD request doesn't work or doesn't confirm it's an image, try GET
                 if not is_valid_image:
-                    logger.debug(f"Sending GET request to {url}")
                     response = requests.get(url, timeout=timeout, stream=True)
                     if response.status_code == 200:
                         content_type = response.headers.get('Content-Type', '')
@@ -129,7 +128,8 @@ def image_search(search_query: str) -> dict:
     except Exception as e:
         logger.error(f"Error in image_search: {str(e)}")
         return {"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "query": search_query, "results": []}
-    
+
+@tool
 def web_search(search_query: str, ) -> dict:
     """
     Search for web content based on a query.
@@ -159,24 +159,23 @@ def web_search(search_query: str, ) -> dict:
             }
             filtered_results.append(filtered_result)
         
-        # Create a timestamp for this search
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Create a search record with timestamp and query
         search_record = {
-            "timestamp": timestamp,
             "query": search_query,
             "results": filtered_results
         }
         with open(os.path.join(OUTPUT_DIR, "web_search_record.json"), "w", encoding="utf-8") as f:
             json.dump(search_record, f)
-            
+        
+        logger.info(f"Web search record: {search_record}")
         return search_record
     
     except Exception as e:
         logger.error(f"Error in web_search: {str(e)}")
         return {"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "query": search_query, "results": []}
-    
+
+@tool  
 def crawl_url(url: str) -> dict:
     """
     Crawl a webpage URL to extract its text content.
@@ -207,12 +206,8 @@ def crawl_url(url: str) -> dict:
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         text = ' '.join(chunk for chunk in chunks if chunk)
         
-        # Create a timestamp for this crawl
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
         # Create a crawl record with timestamp and URL
         crawl_record = {
-            "timestamp": timestamp,
             "url": url,
             "content": text[:6000]  # Store the first 6000 characters
         }
@@ -222,85 +217,40 @@ def crawl_url(url: str) -> dict:
         return crawl_record
     except Exception as e:
         logger.error(f"Error in crawl_url: {str(e)}")
-        return {"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "url": url, "content": "Failed to crawl the URL"}
-    
-def generate_presentation_outline(topic: str, instructions: str) -> str:
-    """
-    Generate a presentation outline based on a topic and instructions.
-    
-    Args:
-        topic: The topic of the presentation
-        instructions: The instructions for the presentation
-    """
-    prompt = f"""
-    Generate a presentation outline for the following topic: {topic}
-    The presentation should follow these instructions: {instructions}
-    """
-    response = LLM.invoke(prompt)
-    return response.content
+        return {"url": url, "content": "Failed to crawl the URL"}
             
-
-def generate_presentation(slide_number: int, title: str, content: list[str], image_url: Optional[str], pallette_colors: list[str], layout: str, style: str) -> str:
+@tool
+def generate_slide(slide_number: int, instructions: str) -> str:
     """
     Generate a single HTML slide and save it to the file system.
     
     Args:
-        slide_number: The slide number (integer)
-        title: The slide title
-        content: The content for the slide
-        image_url: The url of the image for the slide
-        pallette_colors: List of color hex codes for the slide
-        layout: The layout for the slide
-        style: The design style for the slide using tailwind css
+        instructions: The instructions for the slide
     Returns:
         String with information about the generated slide
     """
     try:
-        logger.info(f"Generating slide #{slide_number}: {title}")
+        logger.info(f"Instructions: {instructions}")
         
-        # Read HTML slide template
-        try:
-            with open("rules/html.txt", "r") as f:
-                html_rules = f.read()
-        except FileNotFoundError:
-            # Fallback template if file not found
-            html_rules = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Slide</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-                    .slide { width: 100%; height: 100vh; padding: 2em; box-sizing: border-box; }
-                    h1 { color: #333; }
-                </style>
-            </head>
-            <body>
-                <div class="slide">
-                    <h1>{title}</h1>
-                    <div class="content">{content}</div>
-                </div>
-            </body>
-            </html>
-            """
+        with open("rules/html.txt", "r") as f:
+            html_rules = f.read()
             
         presentation_prompt = f"""
         You are a professional presentation designer.
-        This is the html rules: {html_rules}
         
-        Ignore all previous instructions
-        Create a single HTML slide about {title}. 
-        Use this content for the slide, improve idea on it: {content}
-        If there is an image_url, add it to the slide: {image_url}.
-        Using this pallette colors: {pallette_colors}
+        This is the html rules for the slides: {html_rules}
         
-        The slide should be in style: {style}
+        Ignore the previous instructions
         
-        The slide should be designed with the following layout: {layout}
+        The slide should follow these instructions: {instructions}
         
         Create slide presentation with tailwind css for artiristic like slidego template, make it look minimalistic and concise, but in details.
         IMPORTANT:
+        The slide should be generate with: width: 1280px; min-height: 720px; position: relative; overflow: hidden;
+        All elements should be wrap in a div 
+        Using Google Font, Tailwind CSS, Font Awesome icons to add-on
+        Using chart.js if needed
+        Image if exists, should be in a appropriate scale, that's not too big or too small, and not too wide or too narrow.
         If the content is short, make it 1 column, if the content is long, make it multiple columns.
         Make html slide overlay: hidden.
         Make the slide responsive, and big font size.
@@ -312,51 +262,62 @@ def generate_presentation(slide_number: int, title: str, content: list[str], ima
         response = LLM.invoke(presentation_prompt)
         html_content = response.content if hasattr(response, 'content') else str(response)
         
+        # Extract only the HTML content between <!DOCTYPE html> and </html>
+        start_marker = "<!DOCTYPE html>"
+        end_marker = "</html>"
+        start_idx = html_content.find(start_marker)
+        end_idx = html_content.find(end_marker)
+        
+        if start_idx != -1 and end_idx != -1:
+            html_content = html_content[start_idx:end_idx + len(end_marker)]
+        else:
+            logger.warning("Could not find proper HTML markers in the response")
+        
         # Save individual slide
         os.makedirs(GENERATED_SLIDES_DIR, exist_ok=True)
         output_path = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_number:03d}.html")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
             
-        return f"Slide #{slide_number} '{title}' generated successfully. Saved to {output_path}"
+        return f"Slide #{slide_number} generated successfully. Saved to {output_path}"
     except Exception as e:
         logger.error(f"Failed to generate slide: {str(e)}")
         return f"Failed to generate slide: {str(e)}"
 
 
 
-# Create structured tools with args_schema
-image_search_tool = StructuredTool(
-    name="image_search",
-    description="Search for images based on a query. Returns a list of image URLs.",
-    func=image_search,
-    args_schema=SearchQuery
-)
+# # Create structured tools with args_schema
+# image_search_tool = StructuredTool(
+#     name="image_search",
+#     description="Search for images based on a query. Returns a list of image URLs.",
+#     func=image_search,
+#     args_schema=SearchQuery
+# )
 
-web_search_tool = StructuredTool(
-    name="web_search",
-    description="Search for web content based on a query. Returns a list of search results.",
-    func=web_search,
-    args_schema=SearchQuery
-)
+# web_search_tool = StructuredTool(
+#     name="web_search",
+#     description="Search for web content based on a query. Returns a list of search results.",
+#     func=web_search,
+#     args_schema=SearchQuery
+# )
 
-crawl_tool = StructuredTool(
-    name="crawl_url",
-    description="Crawl a webpage URL to extract its text content. Use this when you need to get detailed information from a specific webpage.",
-    func=crawl_url,
-    args_schema=UrlQuery
-)
+# crawl_tool = StructuredTool(
+#     name="crawl_url",
+#     description="Crawl a webpage URL to extract its text content. Use this when you need to get detailed information from a specific webpage.",
+#     func=crawl_url,
+#     args_schema=UrlQuery
+# )
 
-generate_presentation_outline_tool = StructuredTool(
-    name="generate_presentation_outline",
-    description="Generate a presentation outline. Requires a topic and instructions. Returns the outline of the presentation.",
-    func=generate_presentation_outline,
-    args_schema=PresentationOutlineQuery
-)
+# generate_presentation_outline_tool = StructuredTool(
+#     name="generate_presentation_outline",
+#     description="Generate a presentation outline. Requires a topic and instructions. Returns the outline of the presentation.",
+#     func=generate_presentation_outline,
+#     args_schema=PresentationOutlineQuery
+# )
     
-presentation_tool = StructuredTool(
-    name="generate_presentation",
-    description="Generate an HTML presentation slide. Requires five parameters: slide_number (int), title (string), content (string), layout (string), and style (string). Returns the file path of the generated slide.",
-    func=generate_presentation,
-    args_schema=PresentationQuery
-)
+# presentation_tool = StructuredTool(
+#     name="generate_presentation",
+#     description="Generate an HTML presentation slide. Requires five parameters: slide_number (int), title (string), content (string), layout (string), and style (string). Returns the file path of the generated slide.",
+#     func=generate_slide,
+#     args_schema=PresentationQuery
+# )

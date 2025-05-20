@@ -1,153 +1,509 @@
-        
-        Requirements:
-        1. Design Strategy:
-           - If this is slide 1 (title slide):
-             * Create a visually striking and memorable design
-             * Use bold typography and impactful layout
-             * Consider using a hero image or gradient background
-             * Establish the color scheme and design language for the entire presentation
-             * Save the chosen design elements (colors, fonts, layout patterns) for consistency
-           - If this is not slide 1:
-             * Maintain the design language established in the previous slide
-             * Use the same color scheme, typography, and layout patterns
-             * Ensure visual consistency while adapting the layout for content type
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fan Engagement & Direct-to-Fan Relationship</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        .slide {
+            width: 1280px;
+            min-height: 720px;
+            background-color: #191414;
+            color: white;
+            font-family: 'Montserrat', sans-serif;
+        }
+        .title {
+            font-size: 36px;
+            font-weight: 800;
+            background: linear-gradient(90deg, #1DB954 0%, #64d892 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            font-family: 'Poppins', sans-serif;
+            color: #E0E0E0;
+        }
+        .chart-container {
+            height: 240px;
+            width: 100%;
+        }
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1DB954;
+        }
+        .stat-label {
+            font-family: 'Poppins', sans-serif;
+            font-size: 14px;
+            color: #E0E0E0;
+            font-weight: 300;
+        }
+        .fan-tier {
+            position: relative;
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        .fan-tier:hover {
+            transform: translateX(5px);
+        }
+        .casual-fan {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .engaged-fan {
+            background: rgba(29, 185, 84, 0.1);
+        }
+        .core-fan {
+            background: rgba(29, 185, 84, 0.2);
+        }
+        .super-fan {
+            background: rgba(29, 185, 84, 0.3);
+        }
+        .fan-tier-icon {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            font-size: 24px;
+            opacity: 0.5;
+        }
+        .platform-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            height: 100%;
+        }
+        .platform-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .platform-header {
+            padding: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+        }
+        .platform-content {
+            padding: 12px;
+        }
+        .platform-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            color: #191414;
+        }
+        .example-box {
+            background: rgba(29, 185, 84, 0.1);
+            border-radius: 8px;
+            border-left: 3px solid #1DB954;
+            transition: all 0.3s ease;
+        }
+        .example-box:hover {
+            background: rgba(29, 185, 84, 0.15);
+            transform: translateX(5px);
+        }
+        .fan-value-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 5px;
+            color: #191414;
+            font-weight: 600;
+        }
+        .green-bg {
+            background-color: #1DB954;
+        }
+        .blue-bg {
+            background-color: #3498db;
+        }
+        .purple-bg {
+            background-color: #9b59b6;
+        }
+        .orange-bg {
+            background-color: #e67e22;
+        }
+    </style>
+</head>
+<body>
+    <div class="slide p-10">
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="title">THE POWER OF DIRECT-TO-FAN RELATIONSHIPS</h1>
+            <p class="subtitle">Building deeper connections and sustainable careers through fan engagement</p>
+        </div>
 
-        2. Visual Elements:
-           - Use Tailwind CSS for styling
-           - Incorporate Google Fonts (Montserrat font family)
-           - Include responsive design principles
-           - Optimize layout for readability and visual hierarchy
-           - Create a clean, organized table of contents with the sections provided
-           - Use high contrast colors for text and background (minimum contrast ratio of 4.5:1)
-           - Include relevant images from the image search results
-           - Ensure images are responsive and maintain aspect ratio
-           - Add proper alt text for accessibility
-
-        3. Technical Requirements:
-           - Follow this exact HTML structure:
-             ```
-             <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;900&display=swap">
-                <style>
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        overflow: hidden;
-                        font-family: 'Montserrat', sans-serif;
-                    }
-                    .slide {
-                        width: 1280px;
-                        min-height: 720px;
-                        position: relative;
-                        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-                        overflow: hidden;
-                    }
-                    .title {
-                        font-weight: 900;
-                        letter-spacing: -1px;
-                        line-height: 1.1;
-                        background: linear-gradient(90deg, #ff6b6b, #ffa502, #70a1ff);
-                        -webkit-background-clip: text;
-                        background-clip: text;
-                        color: transparent;
-                    }
-                    .subtitle {
-                        font-weight: 600;
-                        letter-spacing: 2px;
-                    }
-                    .grid-pattern {
-                        position: absolute;
-                        width: 100%;
-                        height: 100%;
-                        background-image: 
-                            linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                            linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-                        background-size: 40px 40px;
-                        z-index: 1;
-                    }
-                    .circle {
-                        position: absolute;
-                        border-radius: 50%;
-                        background: linear-gradient(45deg, rgba(255, 107, 107, 0.2), rgba(112, 161, 255, 0.2));
-                        filter: blur(40px);
-                        z-index: 0;
-                    }
-                    .content {
-                        position: relative;
-                        z-index: 2;
-                    }
-                    @keyframes float {
-                        0% { transform: translateY(0px); }
-                        50% { transform: translateY(-15px); }
-                        100% { transform: translateY(0px); }
-                    }
-                    .floating {
-                        animation: float 6s ease-in-out infinite;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="slide flex flex-col items-center justify-center text-white p-12">
-                    <!-- Background Elements -->
-                    <div class="grid-pattern"></div>
-                    <div class="circle" style="width: 500px; height: 500px; top: -150px; right: -100px;"></div>
-                    <div class="circle" style="width: 300px; height: 300px; bottom: -50px; left: -50px;"></div>
-                    
-                    <!-- Main Content -->
-                    <div class="content flex flex-col items-center justify-center h-full w-full">
-                        <div class="floating mb-8">
-                            <div class="text-sm uppercase tracking-widest text-gray-400 mb-4">Exploring the Future of Digital Media</div>
-                            <h1 class="title text-center text-7xl mb-4">THE YEAR OF IMPACT</h1>
-                            <h2 class="subtitle text-center text-4xl text-blue-300 mt-2">2025 MEDIA TRENDS</h2>
-                        </div>
-                        
-                        <!-- Decorative Element -->
-                        <div class="w-24 h-1 bg-gradient-to-r from-red-400 via-yellow-400 to-blue-400 my-8 rounded-full"></div>
-                        
-                        <!-- Visual Elements for Media Theme -->
-                        <div class="flex space-x-6 my-6">
-                            <div class="w-12 h-12 bg-blue-600 rounded-lg opacity-80 transform rotate-12"></div>
-                            <div class="w-12 h-12 bg-purple-600 rounded-full opacity-80"></div>
-                            <div class="w-12 h-12 bg-pink-600 rounded-lg opacity-80 transform -rotate-12"></div>
-                        </div>
+        <div class="flex h-full gap-6">
+            <!-- Left column - Fan Value Pyramid -->
+            <div class="w-1/3">
+                <!-- Key Statistics -->
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="bg-opacity-10 bg-white p-3 rounded-lg">
+                        <div class="stat-number">42x</div>
+                        <div class="stat-label">HIGHER VALUE OF SUPERFANS VS CASUAL</div>
                     </div>
-                    
-                    <!-- Footer -->
-                    <div class="absolute bottom-6 left-0 right-0 text-center text-xs text-gray-500">
-                        © 2025 Genspark Media Intelligence
+                    <div class="bg-opacity-10 bg-white p-3 rounded-lg">
+                        <div class="stat-number">$7.1B</div>
+                        <div class="stat-label">DIRECT FAN REVENUE IN 2024</div>
                     </div>
                 </div>
-            </body>
-            </html>
+                
+                <!-- Fan Value Chart -->
+                <div class="chart-container mb-6">
+                    <canvas id="fanValueChart"></canvas>
+                </div>
+                
+                <!-- Fan Tiers -->
+                <div>
+                    <div class="font-bold mb-3">THE FAN PYRAMID</div>
+                    
+                    <div class="super-fan fan-tier">
+                        <div class="font-bold">Superfans (3%)</div>
+                        <div class="text-sm text-gray-300 mb-2">All-in community members, high spending</div>
+                        <div class="flex flex-wrap">
+                            <span class="fan-value-tag green-bg mr-1">VIP Access</span>
+                            <span class="fan-value-tag green-bg mr-1">Merch Bundles</span>
+                            <span class="fan-value-tag green-bg">1:1 Experiences</span>
+                        </div>
+                        <i class="fas fa-crown fan-tier-icon text-yellow-400"></i>
+                    </div>
+                    
+                    <div class="core-fan fan-tier">
+                        <div class="font-bold">Core Fans (8%)</div>
+                        <div class="text-sm text-gray-300 mb-2">Active engagement, regular spending</div>
+                        <div class="flex flex-wrap">
+                            <span class="fan-value-tag blue-bg mr-1">Membership</span>
+                            <span class="fan-value-tag blue-bg mr-1">Exclusive Content</span>
+                        </div>
+                        <i class="fas fa-star fan-tier-icon text-blue-400"></i>
+                    </div>
+                    
+                    <div class="engaged-fan fan-tier">
+                        <div class="font-bold">Engaged Fans (24%)</div>
+                        <div class="text-sm text-gray-300 mb-2">Follow on socials, occasional purchases</div>
+                        <div class="flex flex-wrap">
+                            <span class="fan-value-tag purple-bg mr-1">Merch</span>
+                            <span class="fan-value-tag purple-bg">Concerts</span>
+                        </div>
+                        <i class="fas fa-thumbs-up fan-tier-icon text-purple-400"></i>
+                    </div>
+                    
+                    <div class="casual-fan fan-tier">
+                        <div class="font-bold">Casual Listeners (65%)</div>
+                        <div class="text-sm text-gray-300 mb-2">Stream occasionally, minimal spending</div>
+                        <div class="flex flex-wrap">
+                            <span class="fan-value-tag orange-bg">Streams</span>
+                        </div>
+                        <i class="fas fa-headphones fan-tier-icon text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Middle column - Direct-to-Fan Platforms -->
+            <div class="w-1/3">
+                <div class="font-bold text-xl mb-3">FAN ENGAGEMENT PLATFORMS</div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <!-- Membership Platforms -->
+                    <div class="platform-card">
+                        <div class="platform-header">
+                            <div class="platform-icon green-bg">
+                                <i class="fas fa-gem"></i>
+                            </div>
+                            <div>Membership</div>
+                        </div>
+                        <div class="platform-content">
+                            <div class="text-sm font-semibold mb-1">Patreon / Memberful</div>
+                            <div class="text-xs text-gray-400">Recurring subscription model</div>
+                            <ul class="text-xs mt-2">
+                                <li>• Tiered offerings</li>
+                                <li>• Exclusive content</li>
+                                <li>• Community access</li>
+                            </ul>
+                            <div class="mt-2 text-xs">
+                                <span class="text-green-400 font-bold">+104%</span> YoY growth
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Community Platforms -->
+                    <div class="platform-card">
+                        <div class="platform-header">
+                            <div class="platform-icon blue-bg">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div>Community</div>
+                        </div>
+                        <div class="platform-content">
+                            <div class="text-sm font-semibold mb-1">Discord / Circle</div>
+                            <div class="text-xs text-gray-400">Fan gathering spaces</div>
+                            <ul class="text-xs mt-2">
+                                <li>• Direct interaction</li>
+                                <li>• Fan-to-fan connections</li>
+                                <li>• Creator-owned spaces</li>
+                            </ul>
+                            <div class="mt-2 text-xs">
+                                <span class="text-green-400 font-bold">+85%</span> YoY growth
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tipping/Support Platforms -->
+                    <div class="platform-card">
+                        <div class="platform-header">
+                            <div class="platform-icon purple-bg">
+                                <i class="fas fa-hand-holding-usd"></i>
+                            </div>
+                            <div>Direct Support</div>
+                        </div>
+                        <div class="platform-content">
+                            <div class="text-sm font-semibold mb-1">Ko-fi / Buy Me a Coffee</div>
+                            <div class="text-xs text-gray-400">Tipping & one-time support</div>
+                            <ul class="text-xs mt-2">
+                                <li>• Low friction giving</li>
+                                <li>• Milestone goals</li>
+                                <li>• Personalized thanks</li>
+                            </ul>
+                            <div class="mt-2 text-xs">
+                                <span class="text-green-400 font-bold">+56%</span> YoY growth
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Direct Sales Platforms -->
+                    <div class="platform-card">
+                        <div class="platform-header">
+                            <div class="platform-icon orange-bg">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div>Direct Sales</div>
+                        </div>
+                        <div class="platform-content">
+                            <div class="text-sm font-semibold mb-1">Bandcamp / Shopify</div>
+                            <div class="text-xs text-gray-400">Artist-owned storefronts</div>
+                            <ul class="text-xs mt-2">
+                                <li>• Higher margins</li>
+                                <li>• Customer data ownership</li>
+                                <li>• Custom experiences</li>
+                            </ul>
+                            <div class="mt-2 text-xs">
+                                <span class="text-green-400 font-bold">+42%</span> YoY growth
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Fan Engagement Strategy -->
+                <div class="bg-opacity-5 bg-white p-4 rounded-lg">
+                    <div class="text-sm font-bold mb-3">FAN ENGAGEMENT STRATEGIES</div>
+                    <div class="text-xs space-y-3">
+                        <div class="flex items-start">
+                            <i class="fas fa-database text-green-400 mt-1 mr-2"></i>
+                            <div>
+                                <div class="font-semibold">First-Party Data Collection</div>
+                                <div class="text-gray-400">Direct communications, independent from platforms</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <i class="fas fa-layer-group text-green-400 mt-1 mr-2"></i>
+                            <div>
+                                <div class="font-semibold">Value Ladders</div>
+                                <div class="text-gray-400">Moving fans up engagement tiers over time</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <i class="fas fa-bullhorn text-green-400 mt-1 mr-2"></i>
+                            <div>
+                                <div class="font-semibold">Cross-Channel Integration</div>
+                                <div class="text-gray-400">Unified strategy across all platforms and touchpoints</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <i class="fas fa-bullseye text-green-400 mt-1 mr-2"></i>
+                            <div>
+                                <div class="font-semibold">Segmentation</div>
+                                <div class="text-gray-400">Tailored approaches for different fan types</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right column - Success Stories and Metrics -->
+            <div class="w-1/3">
+                <div class="font-bold text-xl mb-3">FAN-POWERED SUCCESS STORIES</div>
+                
+                <!-- Fan-Funded Examples -->
+                <div class="example-box p-4 mb-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="font-bold">Amanda Palmer</div>
+                        <div class="text-green-400 font-bold">$1.6M</div>
+                    </div>
+                    <div class="text-xs text-gray-400">Pioneer of Patreon-supported music career with 15,000+ patrons</div>
+                    <div class="text-xs mt-2 bg-opacity-20 bg-green-500 p-2 rounded">
+                        <i class="fas fa-lightbulb text-green-400 mr-1"></i>
+                        <span class="text-green-400 font-bold">KEY INSIGHT:</span> Radical transparency builds trust and financial support
+                    </div>
+                </div>
+                
+                <div class="example-box p-4 mb-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="font-bold">Jacob Collier</div>
+                        <div class="text-green-400 font-bold">$2.8M</div>
+                    </div>
+                    <div class="text-xs text-gray-400">Built community through educational content and accessibility</div>
+                    <div class="text-xs mt-2 bg-opacity-20 bg-green-500 p-2 rounded">
+                        <i class="fas fa-lightbulb text-green-400 mr-1"></i>
+                        <span class="text-green-400 font-bold">KEY INSIGHT:</span> Value-added content creates multi-tier fan ecosystem
+                    </div>
+                </div>
+                
+                <div class="example-box p-4 mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="font-bold">BTS</div>
+                        <div class="text-green-400 font-bold">$22M+</div>
+                    </div>
+                    <div class="text-xs text-gray-400">ARMY membership program with exclusive content and early access</div>
+                    <div class="text-xs mt-2 bg-opacity-20 bg-green-500 p-2 rounded">
+                        <i class="fas fa-lightbulb text-green-400 mr-1"></i>
+                        <span class="text-green-400 font-bold">KEY INSIGHT:</span> Fan identity and community belonging drives engagement
+                    </div>
+                </div>
+                
+                <!-- Fan Engagement Metrics -->
+                <div>
+                    <div class="font-bold mb-3">KEY FAN ENGAGEMENT METRICS</div>
+                    
+                    <div class="bg-opacity-5 bg-white p-4 rounded-lg">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <div class="text-sm font-bold text-green-400">$15-25</div>
+                                <div class="text-xs text-gray-400">Avg. monthly subscription</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-bold text-green-400">3-5%</div>
+                                <div class="text-xs text-gray-400">Conversion to paid fans</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-bold text-green-400">72%</div>
+                                <div class="text-xs text-gray-400">Higher retention with community</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-bold text-green-400">$80-120</div>
+                                <div class="text-xs text-gray-400">Annual value per superfan</div>
+                            </div>
+                        </div>
+                        
+                        <div class="border-t border-gray-700 mt-3 pt-3">
+                            <div class="text-xs text-gray-400">
+                                1,000 true fans with direct relationship = sustainable music career outside traditional system
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Future Trends -->
+                    <div class="mt-4">
+                        <div class="text-sm font-bold mb-2">2024 EMERGING TRENDS</div>
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-microchip text-green-400 mr-2"></i>
+                            <div class="text-xs">AI-powered fan segmentation & personalization</div>
+                        </div>
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-users-cog text-green-400 mr-2"></i>
+                            <div class="text-xs">Fan-governed creative decisions (voting rights)</div>
+                        </div>
+                        <div class="flex items-center">
+                            <i class="fas fa-sitemap text-green-400 mr-2"></i>
+                            <div class="text-xs">Decentralized fan communities with shared ownership</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-             ```
-           - Ensure proper spacing and margins
-           - Implement smooth transitions or animations
-           - Make sure the design is responsive
-           - Ensure the slide fits within the 1280x720 dimensions
-           - Use proper semantic HTML elements
-           - Include ARIA attributes for accessibility
-
-        4. Content Organization:
-           - Create clear visual hierarchy
-           - Use appropriate heading levels
-           - Balance text and visual elements
-           - Include bullet points or numbered lists when appropriate
-           - Use the floating animation for important elements
-           - Include decorative elements like gradient lines or shapes
-           - Ensure text is readable on all backgrounds
-           - Use proper heading hierarchy (h1, h2, h3, etc.)
-
-        5. Required Style Elements:
-           - Font family: 'Montserrat', sans-serif
-           - Background: Dark gradient for better contrast
-           - Text color: White or very light colors for maximum contrast
-           - Consistent spacing and padding
-           - Proper z-index layering for elements
-           - Responsive image handling
-           - Accessible color combinations
+    <script>
+        // Fan Value Chart
+        const ctx = document.getElementById('fanValueChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Casual Listeners', 'Engaged Fans', 'Core Fans', 'Superfans'],
+                datasets: [{
+                    label: 'Annual Revenue Per Fan ($)',
+                    data: [3, 25, 60, 125],
+                    backgroundColor: [
+                        'rgba(255, 159, 64, 0.7)',
+                        'rgba(153, 102, 255, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(29, 185, 84, 0.7)'
+                    ],
+                    borderColor: '#1DB954',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#E0E0E0',
+                            callback: function(value) {
+                                return '$' + value;
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#E0E0E0'
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Annual Value by Fan Type (2024)',
+                        color: '#FFFFFF',
+                        font: {
+                            family: 'Poppins',
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
