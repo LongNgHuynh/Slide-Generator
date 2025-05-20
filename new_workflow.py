@@ -487,40 +487,40 @@ config = {
     }
 }
 
-# while True:
-#     user_input = input("\nEnter your query (or 'exit' to quit): ")
-#     logger.info(f"Received user input: {user_input}")
+while True:
+    user_input = input("\nEnter your query (or 'exit' to quit): ")
+    logger.info(f"Received user input: {user_input}")
 
-#     if user_input.lower() == 'exit':
-#         logger.info("User requested exit")
-#         print("Goodbye!")
-#         break
+    if user_input.lower() == 'exit':
+        logger.info("User requested exit")
+        print("Goodbye!")
+        break
 
-#     # Create initial state
-#     initial_state = {
-#         "messages": [HumanMessage(content=user_input)],
-#         "outline": "",
-#         "images": [],
-#         "found_information": [],
-#         "input": user_input,
-#         "slides": [],
-#         "summary": []
-#     }
-#     logger.info("Created initial state")
+    # Create initial state
+    initial_state = {
+        "messages": [HumanMessage(content=user_input)],
+        "outline": "",
+        "images": [],
+        "found_information": [],
+        "input": user_input,
+        "slides": [],
+        "summary": []
+    }
+    logger.info("Created initial state")
 
-#     try:
-#         logger.info("Starting workflow execution")
-#         result = app.invoke(initial_state, config=config)
-#         logger.info("Workflow execution completed")
-#         logger.debug(f"Final result: {result}")
+    try:
+        logger.info("Starting workflow execution")
+        result = app.invoke(initial_state, config=config)
+        logger.info("Workflow execution completed")
+        logger.debug(f"Final result: {result}")
 
-#         print("\n[DEBUG] Full result:")
-#         pprint.pprint(result)
+        print("\n[DEBUG] Full result:")
+        pprint.pprint(result)
 
-#         for m in result["messages"]:
-#             if isinstance(m, ToolMessage):
-#                 logger.debug(f"Tool message: {m.content}")
-#                 print(f"ToolMessage: {m.content}")
-#     except Exception as e:
-#         logger.error(f"Error in workflow execution: {str(e)}", exc_info=True)
-#         print(f"Error occurred: {str(e)}")
+        for m in result["messages"]:
+            if isinstance(m, ToolMessage):
+                logger.debug(f"Tool message: {m.content}")
+                print(f"ToolMessage: {m.content}")
+    except Exception as e:
+        logger.error(f"Error in workflow execution: {str(e)}", exc_info=True)
+        print(f"Error occurred: {str(e)}")
