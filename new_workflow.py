@@ -1,31 +1,49 @@
-from models.LLMs import GPT_4o, GPT_o3
+from models.LLMs import GPT_4o, GPT_o3, Gemini
 from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
-from utils.tools import Searxng
+# from langchain.prompts import PromptTemplate
+# from utils.tools import Searxng
+# from langgraph_supervisor import create_supervisor, create_handoff_tool
+# from langgraph.prebuilt import InjectedState
+# from langchain_core.runnables import RunnableConfig
+# from langgraph.checkpoint.memory import InMemorySaver
+# from utils.custom_output_parser import CustomOutputParser
+
 from langgraph.checkpoint.memory import MemorySaver
 from typing import Literal, Annotated, List
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, add_messages
-from utils.custom_output_parser import CustomOutputParser
 from langgraph.prebuilt import create_react_agent
-from langgraph_supervisor import create_supervisor, create_handoff_tool
 import uuid, json, os
 import requests, datetime, logging
 from langchain_core.tools import tool
-from langgraph.prebuilt import InjectedState
-from langchain_core.runnables import RunnableConfig
+
 from langgraph.types import Command
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import MessagesState, END, START
 from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage
 from langchain_core.messages import ToolMessage
 from utils.tools import image_search, web_search, crawl_url
+from langfuse import Langfuse
+from langfuse.callback import CallbackHandler
 import pprint
 
 OUTPUT_DIR = os.path.join(os.getcwd(), "semi_output")
 GENERATED_SLIDES_DIR = os.path.join(os.getcwd(), "generated_slides")
-LLM = GPT_4o()
+LLM = Gemini()
+LLM_4o = GPT_4o()
 LLM_o3 = GPT_o3()
+
+
+langfuse = Langfuse(
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+    host="https://cloud.langfuse.com"
+)
+
+langfuse_handler = CallbackHandler(
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+    host="https://cloud.langfuse.com"
+)
 
 # Configure logging
 logging.basicConfig(
@@ -72,7 +90,6 @@ def supervisor_node(state: AgentState) -> Command[Literal["outline_agent", "slid
         Command indicating which node to go to next
     """
     logger.info("Supervisor node: Starting workflow routing")
-    logger.debug(f"Current state: {state}")
     
     if state["summary"]:
         summary = f"This is the summary of the presentation: {state['summary']}"
@@ -84,13 +101,21 @@ def supervisor_node(state: AgentState) -> Command[Literal["outline_agent", "slid
     You can respond to the user's general questions, then go to end.
     Given the user's request, respond with the worker to act next. 
     {summary}
-    If there is slide_summary, you should go to slide_agent to fix slides that need to be enhanced.
+    If there is outline, you should go to slide_agent to generate the slides.
+    If there is slide_summary, you should decide whether or not enhance slides, and which slides need to be enhanced, otherwise go to FINISH.
     Each worker will perform a task and respond with results and status. 
-    When finished creating slides, go to FINISH.
+    When finished creating presentation only, go to FINISH.
+    
+    Respond with ONLY one of these options: outline_agent, slide_agent, summarizer, or FINISH
     """
     messages = [{"role": "system", "content": system_prompt}] + state["messages"]
-    response = LLM.with_structured_output(Router).invoke(messages)
-    goto = response["next"]
+    response = LLM_4o.invoke(messages, config=config)
+    goto = response.content.strip()
+    
+    if goto not in options:
+        logger.warning(f"Invalid response from supervisor: {goto}")
+        goto = "outline_agent"  # Default to outline_agent if invalid response
+        
     if goto == "FINISH":
         goto = END
     logger.info(f"Supervisor node: Routing to {goto}")
@@ -107,7 +132,6 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
         Command to update the state and proceed to supervisor
     """
     logger.info("Outline agent: Starting outline generation")
-    logger.debug(f"Input state: {state}")
     
     prompt = """You are a research assistant helping to create a presentation. Follow these steps:
 
@@ -134,13 +158,12 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
         tools=[image_search, crawl_url, web_search],
         prompt=prompt
     )
-    logger.info("Outline agent: Created agent with tools")
     
-    result = outline_agent.invoke(state)
+    result = outline_agent.invoke(state, config=config)
     logger.info("Outline agent: Completed outline generation")
     
     # Extract tool outputs from messages
-    outline = ""
+    outline = result
     images = []
     found_info = []
     
@@ -197,24 +220,18 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
                         
             except json.JSONDecodeError:
                 logger.warning(f"Failed to parse JSON from {message.name}")
-                if message.name == "generate_presentation_outline":
-                    outline = message.content
-                    logger.info("Generated presentation outline (plain text)")
-                elif message.name == "image_search":
+                if message.name == "image_search":
                     images.append({"url": message.content})
-                    logger.info("Found 1 image (plain text)")
                 elif message.name in ["web_search", "crawl_url"]:
                     found_info.append({
                         "source": message.name,
                         "content": message.content,
                     })
-                    logger.info(f"Found information from {message.name} (plain text)")
         
         # Save the last message content for the return
         if hasattr(message, "content"):
             last_message_content = message.content
-    
-    logger.info(f"Outline agent: Completed with {len(images)} images and {len(found_info)} information sources")
+            
     return Command(
         update={
             "messages": [HumanMessage(content=last_message_content, name="outline_agent")],
@@ -236,13 +253,10 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
         Command to update the state and proceed to supervisor
     """
     logger.info("Slide agent: Starting slide generation")
-    logger.info(f"Input state: {state}")
     
     images = state["images"]
     found_info = state["found_information"]
     
-    logger.info(f"Images: {images}")
-    logger.info(f"Found information: {found_info}")
     
     @tool
     def generate_slide(slide_number: int, instructions: str, images_url: str, style: str, color_scheme: str, design_language: str) -> str:
@@ -256,13 +270,6 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
             String with information about the generated slide
         """
         try:
-            # Get the state from a global variable or pass it through context
-            # Instead of trying to inject it directly
-            logger.info(f"Instructions: {instructions}")
-            logger.info(f"Images url: {images_url}")
-            logger.info(f"Style: {style}")
-            logger.info(f"Color scheme: {color_scheme}")
-            logger.info(f"Design language: {design_language}")
             
             with open("rules/html.txt", "r") as f:
                 html_rules = f.read()
@@ -304,7 +311,7 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
             """
             
             # Get the response and extract the content
-            response = LLM_o3.invoke(presentation_prompt)
+            response = LLM_o3.invoke(presentation_prompt, config=config)
             html_content = response.content if hasattr(response, 'content') else str(response)
             
             # Extract only the HTML content between <!DOCTYPE html> and </html>
@@ -351,7 +358,7 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     For each slide:
     1. Use the generate_slide tool with appropriate parameters
     2. Include relevant images from the found images if available
-    3. Use a consistent style and color scheme (Giving at least 7 color scheme in name, not in hex code)
+    3. Use a consistent style and color scheme (Giving a random number from 5 to 10, use that number to include number of colors, color scheme in name, not in hex code)
     4. Each slide should be in various way and layout and not similar to each other
     5. Make the slide in details, with a lot of information.
     6. Make the slide responsive, big font size and bold if need to be highlighted.
@@ -365,11 +372,9 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
         model=LLM_o3,
         tools=[generate_slide],
         prompt=prompt
-    )
-    logger.info("Slide agent: Created agent with tools")
-    
+    )    
     try:
-        result = slide_agent.invoke(state)
+        result = slide_agent.invoke(state, config=config)
         logger.info(f"Slide agent: {result}")
         logger.info("Slide agent: Completed slide generation")
         
@@ -441,28 +446,27 @@ def summarizer_node(state: AgentState) -> Command[Literal["supervisor"]]:
         state: The current state of the workflow
     """
     logger.info("Summarizer: Starting slide summarization")
-    logger.debug(f"Input state: {state}")
     
     slides = state["slides"]
     prompt = f"""
     You are a summarizer, tasked with summarizing the presentation slides.
     
     This is the list of slides: {slides}
-    Please summarize that which slides are need to enhance visual and which slides is not.
+    
+    For each slide, analyze if it needs visual enhancement and provide a brief summary.
+    Format your response as follows for each slide:
+    Slide [number]: [brief summary] - [Needs visual enhancement/Visuals are good]
+    
+    Example format:
+    Slide 1: Introduction to the topic - Visuals are good
+    Slide 2: Key concepts overview - Needs visual enhancement
     """
-    response = LLM.with_structured_output(Summarize).invoke(prompt)
+    response = LLM.invoke(prompt, config=config)
     logger.info("Summarizer: Completed slide analysis")
     
-    summary_text = ""
-    if isinstance(response, dict) and "slides" in response:
-        for slide in response["slides"]:
-            summary_text += f"Slide {slide['slide_number']}: {slide['summary']} - {'Needs visual enhancement' if slide['need_enhance_visual'] else 'Visuals are good'}\n"
-            logger.info(f"Analyzed slide {slide['slide_number']}")
-    else:
-        summary_text = str(response)
-        logger.warning("Received unexpected response format from summarizer")
-    
+    summary_text = response.content.strip()
     logger.info("Summarizer: Completed all slide summaries")
+    
     return Command(
         update={
             "messages": [HumanMessage(content=summary_text, name="summarizer")],
@@ -480,11 +484,16 @@ graph.add_node("summarizer", summarizer_node)
 graph.add_edge(START, "supervisor")
 
 app = graph.compile()
+
+trace_id = str(uuid.uuid4())
+# Base configuration
 config = {
     "recursion_limit": 100,
     "configurable": {
-        "thread_id": "1"
-    }
+        "trace_id": trace_id
+    },
+    "callbacks": [langfuse_handler],
+    "run_id": trace_id
 }
 
 while True:

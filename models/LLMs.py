@@ -1,5 +1,6 @@
 import os
 from langchain_openai import AzureChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,4 +24,10 @@ class GPT_o3(AzureChatOpenAI):
             api_version="2024-12-01-preview",
             **kwargs  
         )
-        
+
+class Gemini(ChatGoogleGenerativeAI):
+    def __init__(self, **kwargs):
+        super().__init__(
+            model="gemini-2.5-pro-preview-05-06",
+            **kwargs
+        )

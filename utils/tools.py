@@ -168,7 +168,7 @@ def web_search(search_query: str, ) -> dict:
         with open(os.path.join(OUTPUT_DIR, "web_search_record.json"), "w", encoding="utf-8") as f:
             json.dump(search_record, f)
         
-        logger.info(f"Web search record: {search_record}")
+        logger.info(f"Web search found {len(filtered_results)} results")
         return search_record
     
     except Exception as e:
@@ -258,9 +258,16 @@ def generate_slide(slide_number: int, instructions: str) -> str:
         As many generate token as possible.
         """
         
-        # Get the response and extract the content
-        response = LLM.invoke(presentation_prompt)
-        html_content = response.content if hasattr(response, 'content') else str(response)
+        # Stream the response and yield each chunk
+        html_content = ""
+        for chunk in LLM.stream(presentation_prompt):
+            if hasattr(chunk, 'content'):
+                html_content += chunk.content
+                yield chunk.content
+            else:
+                content = str(chunk)
+                html_content += content
+                yield content
         
         # Extract only the HTML content between <!DOCTYPE html> and </html>
         start_marker = "<!DOCTYPE html>"
@@ -279,10 +286,11 @@ def generate_slide(slide_number: int, instructions: str) -> str:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
             
-        return f"Slide #{slide_number} generated successfully. Saved to {output_path}"
+        yield f"Slide #{slide_number} generated successfully. Saved to {output_path}"
     except Exception as e:
-        logger.error(f"Failed to generate slide: {str(e)}")
-        return f"Failed to generate slide: {str(e)}"
+        error_msg = f"Failed to generate slide: {str(e)}"
+        logger.error(error_msg)
+        yield error_msg
 
 
 
