@@ -1,4 +1,4 @@
-from models.LLMs import GPT_4o, GPT_o3, Gemini
+from models.LLMs import GPT_4o, GPT_o3, Gemini, Claude_3_7_Sonnet
 from langchain.agents import AgentExecutor, create_react_agent
 # from langchain.prompts import PromptTemplate
 # from utils.tools import Searxng
@@ -31,6 +31,7 @@ GENERATED_SLIDES_DIR = os.path.join(os.getcwd(), "generated_slides")
 LLM = Gemini()
 LLM_4o = GPT_4o()
 LLM_o3 = GPT_o3()
+LLM_Claude = Claude_3_7_Sonnet()
 
 
 langfuse = Langfuse(
@@ -140,6 +141,7 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     3. Use image_search to find relevant images
     4. Finally, Generate full presentation content follow the user instructions
     
+    Use those information to generate the presentation content.
     The presentation content should contains these slide:
     - Cover slide
     - Table of contents
@@ -150,7 +152,10 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     - Conclusion slide
     - Reference slide
     
+    If the user ask for 5 slides of presentation for example, you should exclude cover slide and table of contents slide, make sure table of contents slide cover all the slides.
+    
     IMPORTANT: You MUST use at least web_search, crawl_url and image_search before generating the outline.
+    IMPORTANT: Make the full presentation content with as many words as possible, not just the outline.
     """
     
     outline_agent = create_react_agent(
@@ -232,6 +237,8 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
         if hasattr(message, "content"):
             last_message_content = message.content
             
+    logger.info(f"last_message_content: {last_message_content}")
+            
     return Command(
         update={
             "messages": [HumanMessage(content=last_message_content, name="outline_agent")],
@@ -259,13 +266,18 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     
     
     @tool
-    def generate_slide(slide_number: int, instructions: str, images_url: str, style: str, color_scheme: str, design_language: str) -> str:
+    def generate_slide(slide_number: int, instructions: str, images_url: str, style: str, color_scheme: str, design_language: str, first_slide_reference: str = "") -> str:
         """
         Generate a single HTML slide and save it to the file system.
         
         Args:
             slide_number: The number of the slide to generate
             instructions: The instructions for the slide content
+            images_url: The images URL to use for the slide
+            style: The style of the slide
+            color_scheme: The color scheme of the slide
+            design_language: The design language of the slide
+            first_slide_reference: The first slide content for design consistency (optional)
         Returns:
             String with information about the generated slide
         """
@@ -273,6 +285,22 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
             
             with open("rules/html.txt", "r") as f:
                 html_rules = f.read()
+                
+            # Add consistency reference if available
+            consistency_instruction = ""
+            if first_slide_reference and slide_number > 1:
+                consistency_instruction = f"""
+                
+                IMPORTANT FOR CONSISTENCY: This is the first slide that was generated, use it as a reference for maintaining consistent design style, color scheme, layout patterns, and overall visual identity:
+                {first_slide_reference}
+                
+                Please maintain the same:
+                - Color palette and scheme
+                - Font choices and typography
+                - Layout structure and spacing
+                - Design elements and visual style
+                - Overall aesthetic approach
+                """
                 
             presentation_prompt = f"""
             You are a professional presentation designer.
@@ -291,15 +319,17 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
             
             The slide should follow these instructions: {instructions}
             
+            {consistency_instruction}
+            
             Create slide presentation with tailwind css for artiristic slides, with color scheme and design language inspired from the topic.
             Make the slide in details, with a lot of information.
             IMPORTANT:
-            The slide should be generate with: width: 1280px; min-height: 720px; position: relative; overflow: hidden;
+            The slide should be generate with: width: 1280px; min-height: 720px; position: relative;
             All elements should be wrap in a div, or section that split the slide into multiple sections.
             
             
             IMPORTANT: Always using Google Font, Tailwind CSS, Font Awesome icons to add-on
-            Using chart.js if needed
+            Using chart.js if needed (avoid using maintainAspectRatio: false, because it will make the chart spread out to infinite)
             Image should be wrap in section, should be in a appropriate scale, that's not too big or too small, and not too wide or too narrow.
             If the content is short, make it 1 column and in appropriate scale, if the content is long, make it multiple columns.
             Make the slide responsive, big font size and bold if need to be highlighted.
@@ -311,7 +341,7 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
             """
             
             # Get the response and extract the content
-            response = LLM_o3.invoke(presentation_prompt, config=config)
+            response = LLM.invoke(presentation_prompt, config=config)
             html_content = response.content if hasattr(response, 'content') else str(response)
             
             # Extract only the HTML content between <!DOCTYPE html> and </html>
@@ -342,14 +372,14 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     prompt = f"""You are a presentation slide generator. Your task is to create slides based on the outline.
     
     This is list of images that you can use for the slides: {images}
-    This is the list of information that you can use for the slides: {found_info}
     This is the instructions for the slides: {instruction}
     
     Strategy:
     1. First think about design style, color scheme, and design language that inspired from the topic.
     2. Think about how to display the slide, giving details description, send the tool as more as information as possible.
-    2. Use the generate_slide tool to generate the slide
-    3. Repeat until all slides are generated
+    3. Use the generate_slide tool to generate the slide
+    4. IMPORTANT: After generating the first slide, save its content and use it as first_slide_reference parameter for all subsequent slides to maintain design consistency.
+    5. Repeat until all slides are generated
     
     Remember to generate enough slides follow user instructions.
     
@@ -359,17 +389,19 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     1. Use the generate_slide tool with appropriate parameters
     2. Include relevant images from the found images if available
     3. Use a consistent style and color scheme (Giving a random number from 5 to 10, use that number to include number of colors, color scheme in name, not in hex code)
-    4. Each slide should be in various way and layout and not similar to each other
+    4. Each slide should maintain visual consistency with the first slide while varying content and layout
     5. Make the slide in details, with a lot of information.
     6. Make the slide responsive, big font size and bold if need to be highlighted.
     7. Make the slide background in details way, with many small elements or Font Awesome icons to add on.
+    8. For slides after the first one, ALWAYS pass the first slide's content as first_slide_reference parameter to maintain consistency.
 
     IMPORTANT: Generate slides one at a time, starting with slide 1.
+    IMPORTANT: Save the first slide's result and use it as a reference for all subsequent slides.
     """
     
     # Use the enhanced tool instead of the original one
     slide_agent = create_react_agent(
-        model=LLM_o3,
+        model=LLM_Claude,
         tools=[generate_slide],
         prompt=prompt
     )    
@@ -404,17 +436,23 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
                             if match:
                                 slide_number = int(match.group(1))
                         
-                        slides.append({
-                            "content": message.content,
-                            "slide_number": slide_number,
-                        })
-                        logger.info(f"Generated slide #{slide_number}")
+                        # Only append the first slide to maintain consistency reference
+                        if slide_number == 1:
+                            slides.append({
+                                "content": message.content,
+                                "slide_number": slide_number,
+                            })
+                            logger.info(f"Generated and stored slide #{slide_number} as reference")
+                        else:
+                            logger.info(f"Generated slide #{slide_number} (not stored for consistency)")
                     except Exception as e:
                         logger.error(f"Error processing slide: {str(e)}")
-                        slides.append({
-                            "content": message.content,
-                            "error": str(e),
-                        })
+                        # Only append error for first slide
+                        if slide_number == 1:
+                            slides.append({
+                                "content": message.content,
+                                "error": str(e),
+                            })
             
             # Save the last message content for the return
             if hasattr(message, "content"):
