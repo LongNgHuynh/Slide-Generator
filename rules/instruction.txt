@@ -1,0 +1,63 @@
+        
+        Requirements:
+        1. Design Strategy:
+           - If this is slide 1 (title slide):
+             * Create a visually striking and memorable design
+             * Use bold typography and impactful layout
+             * Consider using a hero image or gradient background
+             * Establish the color scheme and design language for the entire presentation
+             * Save the chosen design elements (colors, fonts, layout patterns) for consistency
+           - If this is not slide 1:
+             * Maintain the design language established in the previous slide
+             * Use the same color scheme, typography, and layout patterns
+             * Ensure visual consistency while adapting the layout for content type
+
+        2. Visual Elements:
+           - Use Tailwind CSS for styling
+           - Incorporate Google Fonts (Montserrat font family)
+           - Include responsive design principles
+           - Optimize layout for readability and visual hierarchy
+           - Create a clean, organized table of contents with the sections provided
+           - Use high contrast colors for text and background (minimum contrast ratio of 4.5:1)
+           - Include relevant images from the image search results
+           - Ensure images are responsive and maintain aspect ratio
+           - Add proper alt text for accessibility
+
+        3. Technical Requirements:
+           - Ensure proper spacing and margins
+           - Implement smooth transitions or animations
+           - Make sure the design is responsive
+           - Ensure the slide fits within the 1280x720 dimensions
+           - Use proper semantic HTML elements
+           - Include ARIA attributes for accessibility
+
+        4. Content Organization:
+           - Create clear visual hierarchy
+           - Use appropriate heading levels
+           - Balance text and visual elements
+           - Include bullet points or numbered lists when appropriate
+           - Use the floating animation for important elements
+           - Include decorative elements like gradient lines or shapes
+           - Ensure text is readable on all backgrounds
+           - Use proper heading hierarchy (h1, h2, h3, etc.)
+
+        5. Required Style Elements:
+           - Font family: 'Montserrat', sans-serif
+           - Background: 
+           - Text color: 
+           - Consistent spacing and padding
+           - Proper z-index layering for elements
+           - Responsive image handling
+           - Accessible color combinations
+
+Generate a complete, self-contained HTML file with appropriate styling that effectively presents information on any topic. The HTML should:
+
+Automatically determine the most effective layout and structure based on the content
+Include relevant sections tailored to the specific subject matter (e.g., key concepts, applications, context, related topics)
+Use appropriate visual styling that matches the tone and nature of the subject
+Incorporate relevant data visualizations, diagrams, or conceptual illustrations that enhance understanding
+Be responsive and visually appealing with thoughtful typography and color choices
+Include all necessary CSS styling within the HTML file
+
+The HTML should be presentation-quality and convey the information in a clear, organized manner with visual elements that support the content. Make design choices that reflect the subject matter while maintaining modern design principles.
+This generalized prompt allows for creating presentations on any topic—whether scientific, technological, business, artistic, educational, or other domains—not just historical subjects.

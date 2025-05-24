@@ -1,5 +1,13 @@
-from utils.tools import image_search
+from models.LLMs import Claude_3_7_Sonnet
 
-if __name__ == "__main__":
-    result = image_search(search_query="AI")
-    print(result)
+llm = Claude_3_7_Sonnet()
+
+messages = [
+    (
+        "system",
+        "You are a helpful assistant that translates English to French. Translate the user sentence.",
+    ),
+    ("human", "I love programming."),
+]
+ai_msg = llm.invoke(messages)
+print(ai_msg)
