@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "generating-slide"
 version = "0.1.0"
@@ -45,6 +49,7 @@ dependencies = [
     "langfuse>=2.60.5",
     "langgraph==0.3.27",
     "langgraph-checkpoint==2.0.24",
+    "langgraph-cli[inmem]>=0.2.7",
     "langgraph-prebuilt==0.1.8",
     "langgraph-sdk==0.1.61",
     "langgraph-supervisor==0.0.16",
@@ -85,3 +90,7 @@ dependencies = [
     "xxhash==3.5.0",
     "zstandard==0.23.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["models*", "utils*"]
+exclude = ["rules*", "images*", "generated_slides*", "semi_output*"]

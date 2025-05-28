@@ -164,8 +164,7 @@ dmypy.json
 # HTML generate files
 *.html
 
-#json output files
-*.json
+/semi_output
 
 # Pyre type checker
 .pyre/
