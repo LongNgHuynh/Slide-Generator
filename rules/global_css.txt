@@ -1,0 +1,133 @@
+<style>
+            body {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+            }
+            .slide {
+                width: 1280px;
+                min-height: 720px;
+                background-color: #191414;
+                color: white;
+                font-family: 'Montserrat', sans-serif;
+            }
+            .title {
+                font-size: 36px;
+                font-weight: 800;
+                background: linear-gradient(90deg, #1DB954 0%, #64d892 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }
+            .subtitle {
+                font-family: 'Poppins', sans-serif;
+                color: #E0E0E0;
+            }
+            .chart-container {
+                height: 240px;
+                width: 100%;
+            }
+            .stat-number {
+                font-size: 32px;
+                font-weight: 700;
+                color: #1DB954;
+            }
+            .stat-label {
+                font-family: 'Poppins', sans-serif;
+                font-size: 14px;
+                color: #E0E0E0;
+                font-weight: 300;
+            }
+            .fan-tier {
+                position: relative;
+                padding: 15px;
+                margin-bottom: 12px;
+                border-radius: 10px;
+                transition: all 0.3s ease;
+            }
+            .fan-tier:hover {
+                transform: translateX(5px);
+            }
+            .casual-fan {
+                background: rgba(255, 255, 255, 0.05);
+            }
+            .engaged-fan {
+                background: rgba(29, 185, 84, 0.1);
+            }
+            .core-fan {
+                background: rgba(29, 185, 84, 0.2);
+            }
+            .super-fan {
+                background: rgba(29, 185, 84, 0.3);
+            }
+            .fan-tier-icon {
+                position: absolute;
+                top: 50%;
+                right: 20px;
+                transform: translateY(-50%);
+                font-size: 24px;
+                opacity: 0.5;
+            }
+            .platform-card {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 10px;
+                transition: all 0.3s ease;
+                overflow: hidden;
+                height: 100%;
+            }
+            .platform-card:hover {
+                transform: translateY(-5px);
+                background: rgba(255, 255, 255, 0.1);
+                box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            }
+            .platform-header {
+                padding: 12px;
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+            }
+            .platform-content {
+                padding: 12px;
+            }
+            .platform-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 12px;
+                color: #191414;
+            }
+            .example-box {
+                background: rgba(29, 185, 84, 0.1);
+                border-radius: 8px;
+                border-left: 3px solid #1DB954;
+                transition: all 0.3s ease;
+            }
+            .example-box:hover {
+                background: rgba(29, 185, 84, 0.15);
+                transform: translateX(5px);
+            }
+            .fan-value-tag {
+                display: inline-block;
+                padding: 4px 8px;
+                border-radius: 20px;
+                font-size: 12px;
+                margin-top: 5px;
+                color: #191414;
+                font-weight: 600;
+            }
+            .green-bg {
+                background-color: #1DB954;
+            }
+            .blue-bg {
+                background-color: #3498db;
+            }
+            .purple-bg {
+                background-color: #9b59b6;
+            }
+            .orange-bg {
+                background-color: #e67e22;
+            }
+        </style>

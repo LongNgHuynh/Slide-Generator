@@ -3,13 +3,12 @@ import os
 import logging
 from utils.search import Searxng
 from models.LLMs import GPT_4o, GPT_o3
-from langchain.tools import StructuredTool
 from pydantic import BaseModel
 import requests
 from bs4 import BeautifulSoup
 import datetime
 from typing import Optional, Annotated
-from langgraph.prebuilt import InjectedState
+# from langgraph.prebuilt import InjectedState
 from langchain.tools import tool
 # from typing import List, Dict
 
@@ -220,104 +219,200 @@ def crawl_url(url: str) -> dict:
         return {"url": url, "content": "Failed to crawl the URL"}
             
 @tool
-def generate_slide(slide_number: int, instructions: str) -> str:
-    """
-    Generate a single HTML slide and save it to the file system.
-    
-    Args:
-        instructions: The instructions for the slide
-    Returns:
-        String with information about the generated slide
+def generate_slide(slide_number: int, instructions: str, images_urls: str, style: str, content: str) -> str:
+    """Generate a single HTML slide and save it to the file system.
+    The 'instructions' argument should contain ALL text, data, and specific guidance for this slide's content, 
+    including any relevant research information or outline points.
     """
     try:
-        logger.info(f"Instructions: {instructions}")
+        logger.info(f"generate_slide tool called for slide #{slide_number}")
+        logger.debug(f"generate_slide image_urls: {images_urls}")
+        logger.debug(f"generate_slide instructions (first 150 chars): {instructions[:150]}...")
         
-        with open("rules/html.txt", "r") as f:
-            html_rules = f.read()
+        rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
+        html_rules = ""
+        try:
+            with open(rules_html_path, "r", encoding="utf-8") as f:
+                html_rules = f.read()
+        except FileNotFoundError:
+            logger.warning(f"HTML rules file not found at {rules_html_path}. Using placeholder.")
+            html_rules = "<!-- HTML rules not found -->"
             
         presentation_prompt = f"""
-        You are a professional presentation designer.
+You are a professional presentation designer specializing in Material Design principles.
+
+Base HTML structure/rules to consider: 
+{html_rules}
+
+Image URL(s) to incorporate if relevant (use your judgment based on instructions):
+{images_urls}
+
+Design parameters for this slide:
+Style: {style}
+Content: {content}
+
+Core content and detailed instructions for THIS SPECIFIC SLIDE (this includes all text, data, and layout guidance):
+{instructions}
+
+Your task is to generate the complete HTML for this single slide following Material Design principles.
+
+## Technical Specifications:
+- **Dimensions**: width: 1280px; min-height: 720px; position: relative; overflow: hidden;
+- **Material Design Framework**: Implement Google's Material Design 3 principles
+- **Multi-column Layout**: Intelligently distribute content across columns based on content length and type
+- **Image Handling**: All images must be wrapped in dedicated div containers with proper Material Design styling
+
+## Material Design Requirements:
+- **Typography**: Use Material Design typography scale (Roboto font family)
+- **Color System**: Implement Material Design color tokens and elevation system
+- **Spacing**: Follow 8dp grid system for consistent spacing
+- **Shadows & Elevation**: Use appropriate Material Design shadow levels (elevation 0-24)
+- **Rounded Corners**: Apply Material Design border radius (4dp, 8dp, 12dp, 16dp)
+- **Component Styling**: Use Material Design component patterns (cards, buttons, chips, etc.)
+
+## Layout Structure:
+- **Multi-column Logic**:
+  - Short content (< 200 words): Single column with generous spacing
+  - Medium content (200-500 words): Two-column layout
+  - Long content (> 500 words): Three-column layout or structured sections
+  - Mixed content: Asymmetrical columns based on content hierarchy
+
+## Image Handling Requirements:
+- **Mandatory Container**: ALL images must be wrapped in `<div class="material-image-container">`
+- **Responsive Scaling with Height Control**: Images must scale responsively using Tailwind classes:
+  - `w-full h-auto` for full-width responsive images
+  - `max-h-96` or `max-h-80` to prevent excessive height (adjust based on content)
+  - `object-cover` or `object-contain` for proper aspect ratio handling
+  - `max-w-full` to prevent overflow
+- **Height Constraints by Content Type**:
+  - Small images: `max-h-48` (192px)
+  - Medium images: `max-h-64` (256px) 
+  - Large images: `max-h-80` (320px)
+  - Hero-style images: `max-h-96` (384px)
+- **Material Design Styling**: Apply Material Design elevation and corners:
+  - `shadow-md rounded-lg` for standard elevation
+  - `shadow-lg rounded-xl` for emphasized images
+- **Responsive Breakpoints**: Use Tailwind responsive prefixes for different screen sizes:
+  - `sm:max-h-32 md:max-h-48 lg:max-h-64` for adaptive height sizing
+  - `sm:w-1/2 md:w-1/3 lg:w-1/4` for adaptive width sizing
+- **Example Structure**:
+```html
+<div class="material-image-container shadow-md rounded-lg overflow-hidden max-w-md mx-auto">
+    <img src="image-url" alt="description" class="w-full h-auto max-h-64 object-cover">
+</div>
+Content Organization:
+
+Header Section: Material Design app bar styling with title and optional subtitle
+Main Content: Organized in Material Design cards or sections
+Image Containers:
+
+Wrap ALL images in <div class="material-image-container"> with Material Design styling
+Apply appropriate elevation and rounded corners using Tailwind classes
+Include proper aspect ratio containers for responsive scaling
+Images must be responsive and scale properly across all screen sizes
+Use Tailwind responsive image classes: w-full h-auto object-cover or object-contain
+No hero background images - images should be content elements only
+
+
+Footer/Action Area: Material Design button styling if actions are needed
+
+Styling Requirements:
+
+CSS Framework: Use Tailwind CSS exclusively for all styling (no custom CSS)
+Typography:
+
+Headline: text-4xl md:text-5xl lg:text-6xl font-normal
+Subheading: text-xl md:text-2xl font-medium
+Body: text-base md:text-lg leading-relaxed
+Caption: text-sm text-gray-600
+
+
+Color Palette: Use Material Design color system
+
+Primary: Blue palette (blue-500, blue-600, etc.)
+Secondary: Teal palette
+Surface: Gray-50, White
+On-surface: Gray-900, Gray-700
+
+
+Spacing: Use consistent spacing scale (space-4, space-6, space-8, space-12, space-16)
+Cards: Use shadow-md, shadow-lg with rounded-lg or rounded-xl
+
+Interactive Elements:
+
+Hover States: Implement Material Design hover effects
+Focus States: Proper focus indicators for accessibility
+Transitions: Smooth transitions using duration-200 or duration-300
+
+Background Styling:
+
+Main Background: Solid Material Design surface color (never hero images)
+Section Backgrounds: Use Material Design surface variants and elevation
+Gradient Accents: Subtle Material Design inspired gradients only as accents
+
+Responsive Design:
+
+Breakpoints: sm:, md:, lg:, xl: for different screen sizes
+Typography: Responsive text sizing using Tailwind responsive prefixes
+Layout: Adaptive column layouts that stack on smaller screens
+Images: All images must use Material Design responsive scaling with controlled height using max-h-* classes and proper aspect ratios
+
+Charts and Data Visualization:
+
+Chart.js Integration: Use Chart.js for all data visualizations and charts
+Chart Styling: Apply Material Design color palette to Chart.js charts
+Responsive Charts: Ensure charts are responsive and properly sized within their containers
+Chart Types: Support bar, line, pie, doughnut, and other Chart.js chart types as needed
+Icons: Integrate Material Design Icons (Google Fonts Icons) where appropriate
+Charts: Use Chart.js exclusively for all data visualizations with Material Design color palette
+Accessibility: Proper ARIA labels, semantic HTML, and keyboard navigation support
+Motion: Subtle animations following Material Design motion principles
+
+Code Structure:
+html<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Material Design fonts and icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="slide-container" style="width: 1280px; min-height: 720px; position: relative; overflow: hidden;">
+        <!-- Material Design structured content here -->
+        <!-- Use Chart.js for any data visualizations -->
+    </div>
+</body>
+</html>
+Generate only the complete HTML code for the slide, ensuring it follows all Material Design principles and multi-column layout requirements specified above.
+"""
         
-        This is the html rules for the slides: {html_rules}
-        
-        Ignore the previous instructions
-        
-        The slide should follow these instructions: {instructions}
-        
-        Create slide presentation with tailwind css for artiristic like slidego template, make it look minimalistic and concise, but in details.
-        IMPORTANT:
-        The slide should be generate with: width: 1280px; min-height: 720px; position: relative; overflow: hidden;
-        All elements should be wrap in a div 
-        Using Google Font, Tailwind CSS, Font Awesome icons to add-on
-        Using chart.js if needed
-        Image if exists, should be in a appropriate scale, that's not too big or too small, and not too wide or too narrow.
-        If the content is short, make it 1 column, if the content is long, make it multiple columns.
-        Make html slide overlay: hidden.
-        Make the slide responsive, and big font size.
-        Make the slide look like a professional presentation.
-        As many generate token as possible.
-        """
-        
-        # Get the response and extract the content
-        response = LLM.invoke(presentation_prompt)
+        response = LLM.invoke(presentation_prompt) 
         html_content = response.content if hasattr(response, 'content') else str(response)
         
-        # Extract only the HTML content between <!DOCTYPE html> and </html>
         start_marker = "<!DOCTYPE html>"
         end_marker = "</html>"
         start_idx = html_content.find(start_marker)
         end_idx = html_content.find(end_marker)
-        
         if start_idx != -1 and end_idx != -1:
             html_content = html_content[start_idx:end_idx + len(end_marker)]
         else:
-            logger.warning("Could not find proper HTML markers in the response")
+            logger.warning("Could not find HTML markers in generate_slide LLM response.")
         
-        # Save individual slide
         os.makedirs(GENERATED_SLIDES_DIR, exist_ok=True)
         output_path = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_number:03d}.html")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
-            
-        return f"Slide #{slide_number} generated successfully. Saved to {output_path}"
+        return f"Slide #{slide_number} generated. Saved to {output_path}"
     except Exception as e:
-        logger.error(f"Failed to generate slide: {str(e)}")
-        return f"Failed to generate slide: {str(e)}"
-
-
-
-# # Create structured tools with args_schema
-# image_search_tool = StructuredTool(
-#     name="image_search",
-#     description="Search for images based on a query. Returns a list of image URLs.",
-#     func=image_search,
-#     args_schema=SearchQuery
-# )
-
-# web_search_tool = StructuredTool(
-#     name="web_search",
-#     description="Search for web content based on a query. Returns a list of search results.",
-#     func=web_search,
-#     args_schema=SearchQuery
-# )
-
-# crawl_tool = StructuredTool(
-#     name="crawl_url",
-#     description="Crawl a webpage URL to extract its text content. Use this when you need to get detailed information from a specific webpage.",
-#     func=crawl_url,
-#     args_schema=UrlQuery
-# )
-
-# generate_presentation_outline_tool = StructuredTool(
-#     name="generate_presentation_outline",
-#     description="Generate a presentation outline. Requires a topic and instructions. Returns the outline of the presentation.",
-#     func=generate_presentation_outline,
-#     args_schema=PresentationOutlineQuery
-# )
+        logger.error(f"Failed to generate slide #{slide_number}: {str(e)}", exc_info=True)
+        return f"Failed to generate slide #{slide_number}: {str(e)}"
     
-# presentation_tool = StructuredTool(
-#     name="generate_presentation",
-#     description="Generate an HTML presentation slide. Requires five parameters: slide_number (int), title (string), content (string), layout (string), and style (string). Returns the file path of the generated slide.",
-#     func=generate_slide,
-#     args_schema=PresentationQuery
-# )
+if __name__ == "__main__":
+    rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
+    with open(rules_html_path, "r", encoding="utf-8") as f:
+        html_rules = f.read()
+    print(html_rules)

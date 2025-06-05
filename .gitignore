@@ -161,6 +161,11 @@ dmypy.json
 #images
 /data
 
+.langgraph_api/
+
+# generated files
+generated_slides/
+
 # HTML generate files
 *.html
 
