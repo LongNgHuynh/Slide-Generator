@@ -166,8 +166,7 @@ dmypy.json
 # generated files
 generated_slides/
 
-# HTML generate files
-*.html
+
 
 /semi_output
 

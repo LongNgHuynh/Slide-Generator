@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Slide Generator</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000000;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .chat-panel {
+            flex: 1;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .slides-panel {
+            flex: 2;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: #000000;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 2px solid #333333;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #ffffff;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            background: #000000;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.assistant {
+            background: #f0f0f0;
+            color: #000000;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+            border: 1px solid #cccccc;
+        }
+
+        .message.system {
+            background: #e0e0e0;
+            color: #000000;
+            text-align: center;
+            font-style: italic;
+            margin: 10px auto;
+            border: 1px solid #cccccc;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 20px;
+            gap: 10px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .chat-input input:focus {
+            border-color: #000000;
+        }
+
+        .chat-input button {
+            padding: 12px 24px;
+            background: #000000;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        .chat-input button:hover {
+            transform: scale(1.05);
+        }
+
+        .chat-input button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .slides-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #ffffff;
+        }
+
+        .slide {
+            background: white;
+            border: 2px solid #000000;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            overflow: hidden;
+            animation: slideInSlide 0.5s ease-out;
+        }
+
+        @keyframes slideInSlide {
+            from {
+                opacity: 0;
+                transform: translateX(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .slide-header {
+            background: #000000;
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .slide-content {
+            padding: 20px;
+            min-height: 200px;
+        }
+
+        .slide.error {
+            border-color: #f44336;
+        }
+
+        .slide.error .slide-header {
+            background: #333333;
+        }
+
+        .status-indicator {
+            padding: 10px 20px;
+            text-align: center;
+            background: #f0f0f0;
+            color: #000000;
+            font-weight: bold;
+            border-bottom: 2px solid #000000;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #000000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .slide-content iframe {
+            width: 100%;
+            height: 400px;
+            border: none;
+            border-radius: 8px;
+            transform-origin: 0 0;
+            overflow: hidden;
+        }
+
+        .iframe-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            overflow: hidden;
+            border-radius: 8px;
+            background: #ffffff;
+            border: 1px solid #000000;
+        }
+
+        .iframe-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            color: #000000;
+            z-index: 1;
+        }
+
+        .iframe-container iframe {
+            position: relative;
+            z-index: 2;
+        }
+
+        .agent-status {
+            padding: 8px 16px;
+            margin: 5px 0;
+            border-radius: 20px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .agent-status.supervisor {
+            background: #f0f0f0;
+            color: #000000;
+            border: 1px solid #000000;
+        }
+
+        .agent-status.outline_agent {
+            background: #e0e0e0;
+            color: #000000;
+            border: 1px solid #000000;
+        }
+
+        .agent-status.slide_agent {
+            background: #d0d0d0;
+            color: #000000;
+            border: 1px solid #000000;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 5px;
+        }
+
+        .slide-counter {
+            background: #f0f0f0;
+            color: #000000;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            border-bottom: 2px solid #000000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Chat Panel -->
+        <div class="chat-panel">
+            <div class="panel-header">
+                <span>💬 Chat with AI</span>
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="message system">
+                    Welcome! Ask me to create a presentation on any topic.
+                </div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="Type your message..." maxlength="500">
+                <button id="sendButton">Send</button>
+            </div>
+        </div>
+
+        <!-- Slides Panel -->
+        <div class="slides-panel">
+            <div class="panel-header">
+                <span>🎯 Generated Slides</span>
+            </div>
+            <div class="slide-counter" id="slideCounter" style="display: none;">
+                Slides Generated: <span id="slideCount">0</span>
+            </div>
+            <div class="status-indicator" id="statusIndicator">
+                Waiting for your request...
+            </div>
+            <div class="slides-container" id="slidesContainer">
+                <!-- Slides will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        let sessionId = null;
+        let isGenerating = false;
+        let slideCount = 0;
+
+        // DOM elements
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const slidesContainer = document.getElementById('slidesContainer');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const slideCounter = document.getElementById('slideCounter');
+        const slideCountSpan = document.getElementById('slideCount');
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            updateStatus('Connected! Ready to generate presentations.');
+        });
+
+        socket.on('session_created', (data) => {
+            sessionId = data.session_id;
+            console.log('Session created:', sessionId);
+        });
+
+        socket.on('chat_message', (data) => {
+            addChatMessage(data.type, data.message, data.timestamp);
+        });
+
+        socket.on('agent_status', (data) => {
+            updateStatus(`${data.agent}: ${data.status}`);
+            addAgentStatusMessage(data);
+        });
+
+        socket.on('slide_generated', (data) => {
+            addSlide(data);
+            slideCount++;
+            updateSlideCounter();
+        });
+
+        socket.on('workflow_complete', (data) => {
+            updateStatus(`Completed! Generated ${data.total_slides} slides in ${data.iterations} iterations.`);
+            isGenerating = false;
+            updateUI();
+        });
+
+        socket.on('error', (data) => {
+            addChatMessage('system', `Error: ${data.message}`);
+            updateStatus('Error occurred. Please try again.');
+            isGenerating = false;
+            updateUI();
+        });
+
+        // UI Functions
+        function addChatMessage(type, message, timestamp) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const messageContent = document.createElement('div');
+            messageContent.textContent = message;
+            messageDiv.appendChild(messageContent);
+            
+            if (timestamp) {
+                const timestampDiv = document.createElement('div');
+                timestampDiv.className = 'timestamp';
+                timestampDiv.textContent = new Date(timestamp).toLocaleTimeString();
+                messageDiv.appendChild(timestampDiv);
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function addAgentStatusMessage(data) {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `agent-status ${data.agent}`;
+            statusDiv.textContent = `${data.agent.replace('_', ' ').toUpperCase()}: ${data.status}`;
+            chatMessages.appendChild(statusDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function addSlide(slideData) {
+            const slideDiv = document.createElement('div');
+            slideDiv.className = slideData.error ? 'slide error' : 'slide';
+            
+            const slideHeader = document.createElement('div');
+            slideHeader.className = 'slide-header';
+            slideHeader.textContent = `Slide ${slideData.slide_number}`;
+            
+            const slideContent = document.createElement('div');
+            slideContent.className = 'slide-content';
+            
+            // Check if content is HTML (from generate_slide tool)
+            if (slideData.content.includes('<html>') || slideData.content.includes('<!DOCTYPE')) {
+                // Create iframe container for proper scaling
+                const iframeContainer = document.createElement('div');
+                iframeContainer.className = 'iframe-container';
+                
+                // Add loading indicator
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'iframe-loading';
+                loadingDiv.innerHTML = '<span class="loading"></span>Loading slide...';
+                iframeContainer.appendChild(loadingDiv);
+                
+                const iframe = document.createElement('iframe');
+                iframe.srcdoc = slideData.content;
+                iframe.style.border = 'none';
+                iframe.style.opacity = '0';
+                
+                iframeContainer.appendChild(iframe);
+                slideContent.appendChild(iframeContainer);
+                
+                // Scale iframe after it's loaded
+                iframe.onload = () => {
+                    setTimeout(() => {
+                        const containerWidth = iframeContainer.offsetWidth;
+                        const containerHeight = iframeContainer.offsetHeight;
+                        
+                        // Standard slide dimensions
+                        const slideWidth = 1280;
+                        const slideHeight = 720;
+                        
+                        // Calculate scale to fit container while maintaining aspect ratio
+                        const scaleX = containerWidth / slideWidth;
+                        const scaleY = containerHeight / slideHeight;
+                        const scale = Math.min(scaleX, scaleY);
+                        
+                        // Set iframe to original slide size first
+                        iframe.style.width = slideWidth + 'px';
+                        iframe.style.height = slideHeight + 'px';
+                        
+                        // Apply scaling transformation
+                        iframe.style.transform = `scale(${scale})`;
+                        iframe.style.transformOrigin = 'top left';
+                        
+                        // Calculate final scaled dimensions
+                        const scaledWidth = slideWidth * scale;
+                        const scaledHeight = slideHeight * scale;
+                        
+                        // Center the scaled iframe in container
+                        const offsetX = (containerWidth - scaledWidth) / 2;
+                        const offsetY = (containerHeight - scaledHeight) / 2;
+                        
+                        iframe.style.position = 'absolute';
+                        iframe.style.left = offsetX + 'px';
+                        iframe.style.top = offsetY + 'px';
+                        
+                        // Show iframe and hide loading
+                        iframe.style.opacity = '1';
+                        iframe.style.transition = 'opacity 0.3s ease';
+                        loadingDiv.style.display = 'none';
+                        
+                        console.log(`Scaled slide ${slideData.slide_number} by ${scale.toFixed(3)} (${scaledWidth}x${scaledHeight} in ${containerWidth}x${containerHeight})`);
+                    }, 100);
+                };
+                
+            } else {
+                // Display as text
+                slideContent.innerHTML = slideData.content.replace(/\n/g, '<br>');
+            }
+            
+            slideDiv.appendChild(slideHeader);
+            slideDiv.appendChild(slideContent);
+            
+            slidesContainer.appendChild(slideDiv);
+            slidesContainer.scrollTop = slidesContainer.scrollHeight;
+        }
+
+        function updateStatus(message) {
+            statusIndicator.innerHTML = `<span class="loading"></span>${message}`;
+        }
+
+        function updateSlideCounter() {
+            slideCountSpan.textContent = slideCount;
+            slideCounter.style.display = 'block';
+        }
+
+        function updateUI() {
+            sendButton.disabled = isGenerating;
+            messageInput.disabled = isGenerating;
+            
+            if (!isGenerating) {
+                statusIndicator.innerHTML = 'Ready for next request...';
+            }
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || isGenerating) return;
+            
+            isGenerating = true;
+            slideCount = 0;
+            slideCountSpan.textContent = '0';
+            updateUI();
+            
+            // Clear previous slides
+            slidesContainer.innerHTML = '';
+            slideCounter.style.display = 'none';
+            
+            socket.emit('send_message', { message: message });
+            messageInput.value = '';
+            updateStatus('Processing your request...');
+        }
+
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        messageInput.addEventListener('input', () => {
+            sendButton.disabled = !messageInput.value.trim() || isGenerating;
+        });
+
+        // Initialize UI
+        updateUI();
+    </script>
+</body>
+</html> 
