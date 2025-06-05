@@ -109,12 +109,8 @@ def image_search(search_query: str) -> dict:
                 logger.error(f"Error checking URL {url}: {str(e)}")
                 continue
         
-        # Create a timestamp for this search
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
         # Create an image search record
         image_record = {
-            "timestamp": timestamp,
             "query": search_query,
             "results": filtered_results
         }
@@ -126,7 +122,7 @@ def image_search(search_query: str) -> dict:
     
     except Exception as e:
         logger.error(f"Error in image_search: {str(e)}")
-        return {"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "query": search_query, "results": []}
+        return {"query": search_query, "results": []}
 
 @tool
 def web_search(search_query: str, ) -> dict:
@@ -159,7 +155,6 @@ def web_search(search_query: str, ) -> dict:
             filtered_results.append(filtered_result)
         
         
-        # Create a search record with timestamp and query
         search_record = {
             "query": search_query,
             "results": filtered_results
@@ -167,12 +162,12 @@ def web_search(search_query: str, ) -> dict:
         with open(os.path.join(OUTPUT_DIR, "web_search_record.json"), "w", encoding="utf-8") as f:
             json.dump(search_record, f)
         
-        logger.info(f"Web search record: {search_record}")
+        logger.info(f"Web search found {len(filtered_results)} results")
         return search_record
     
     except Exception as e:
         logger.error(f"Error in web_search: {str(e)}")
-        return {"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "query": search_query, "results": []}
+        return {"query": search_query, "results": []}
 
 @tool  
 def crawl_url(url: str) -> dict:
@@ -205,7 +200,6 @@ def crawl_url(url: str) -> dict:
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         text = ' '.join(chunk for chunk in chunks if chunk)
         
-        # Create a crawl record with timestamp and URL
         crawl_record = {
             "url": url,
             "content": text[:6000]  # Store the first 6000 characters
