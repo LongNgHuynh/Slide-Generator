@@ -299,6 +299,140 @@
             font-weight: bold;
             border-bottom: 2px solid #000000;
         }
+
+        /* New styles for inline text editing functionality */
+        .slide-edit-mode {
+            position: relative;
+        }
+
+        .slide-edit-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 123, 255, 0.1);
+            color: #007bff;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 11;
+            pointer-events: none;
+        }
+
+        .slide-edit-mode:hover .slide-edit-indicator {
+            opacity: 1;
+        }
+
+        .text-editor-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .text-editor-content {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 500px;
+            min-width: 400px;
+            max-height: 400px;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .text-editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .text-editor-header h3 {
+            margin: 0;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .text-editor-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+            resize: vertical;
+            outline: none;
+            line-height: 1.4;
+        }
+
+        .text-editor-textarea:focus {
+            border-color: #007bff;
+        }
+
+        .text-editor-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        .btn-save, .btn-cancel, .btn-close {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-save {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-save:hover {
+            background: #218838;
+        }
+
+        .btn-cancel, .btn-close {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-cancel:hover, .btn-close:hover {
+            background: #545b62;
+        }
+
+        .editing-indicator {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: #ffc107;
+            color: #000;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            z-index: 12;
+        }
+
+        .slide-saving {
+            opacity: 0.7;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -310,7 +444,7 @@
             </div>
             <div class="chat-messages" id="chatMessages">
                 <div class="message system">
-                    Welcome! Ask me to create a presentation on any topic.
+                    Welcome! Ask me to create a presentation on any topic. You can edit individual text elements by hovering over them in the slides and clicking the ✏️ button.
                 </div>
             </div>
             <div class="chat-input">
@@ -322,7 +456,7 @@
         <!-- Slides Panel -->
         <div class="slides-panel">
             <div class="panel-header">
-                <span>🎯 Generated Slides</span>
+                <span>🎯 Generated Slides (Hover over text to edit)</span>
             </div>
             <div class="slide-counter" id="slideCounter" style="display: none;">
                 Slides Generated: <span id="slideCount">0</span>
@@ -336,12 +470,31 @@
         </div>
     </div>
 
+    <!-- Text Editor Modal -->
+    <div class="text-editor-modal" id="textEditorModal">
+        <div class="text-editor-content">
+            <div class="text-editor-header">
+                <h3>Edit Text</h3>
+                <button class="btn-close" onclick="closeTextEditor()">×</button>
+            </div>
+            <textarea class="text-editor-textarea" id="textEditorTextarea" placeholder="Edit the text content..."></textarea>
+            <div class="text-editor-buttons">
+                <button class="btn-cancel" onclick="closeTextEditor()">Cancel</button>
+                <button class="btn-save" onclick="saveTextEdit()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Initialize Socket.IO connection
         const socket = io();
         let sessionId = null;
         let isGenerating = false;
         let slideCount = 0;
+        let currentEditingSlide = null;
+        let currentEditingElement = null;
+        let originalTextContent = null;
+        let currentStreamingElements = {}; // Track streaming message elements
 
         // DOM elements
         const chatMessages = document.getElementById('chatMessages');
@@ -351,6 +504,8 @@
         const statusIndicator = document.getElementById('statusIndicator');
         const slideCounter = document.getElementById('slideCounter');
         const slideCountSpan = document.getElementById('slideCount');
+        const textEditorModal = document.getElementById('textEditorModal');
+        const textEditorTextarea = document.getElementById('textEditorTextarea');
 
         // Socket event handlers
         socket.on('connect', () => {
@@ -376,6 +531,43 @@
             addSlide(data);
             slideCount++;
             updateSlideCounter();
+        });
+
+        socket.on('slide_updated', (data) => {
+            updateSlideContent(data);
+            addChatMessage('system', `Slide ${data.slide_number} updated successfully!`);
+        });
+
+        socket.on('text_updated', (data) => {
+            updateSlideContent(data);
+            addChatMessage('system', `Text updated in slide ${data.slide_number} successfully!`);
+            
+            // Remove saving indicator
+            const slideDiv = document.querySelector(`[data-slide-number="${data.slide_number}"]`);
+            if (slideDiv) {
+                slideDiv.classList.remove('slide-saving');
+                const editingIndicator = slideDiv.querySelector('.editing-indicator');
+                if (editingIndicator) {
+                    editingIndicator.remove();
+                }
+            }
+        });
+
+        // Token-by-token streaming handlers
+        socket.on('agent_stream_start', (data) => {
+            startAgentStreaming(data.agent);
+        });
+
+        socket.on('agent_stream_token', (data) => {
+            updateAgentStreaming(data.agent, data.token, data.accumulated);
+        });
+
+        socket.on('agent_stream_end', (data) => {
+            endAgentStreaming(data.agent, data.final_content);
+        });
+
+        socket.on('agent_tool_call', (data) => {
+            addToolCallMessage(data.agent, data.tool);
         });
 
         socket.on('workflow_complete', (data) => {
@@ -421,7 +613,8 @@
 
         function addSlide(slideData) {
             const slideDiv = document.createElement('div');
-            slideDiv.className = slideData.error ? 'slide error' : 'slide';
+            slideDiv.className = slideData.error ? 'slide error slide-edit-mode' : 'slide slide-edit-mode';
+            slideDiv.setAttribute('data-slide-number', slideData.slide_number);
             
             const slideHeader = document.createElement('div');
             slideHeader.className = 'slide-header';
@@ -429,6 +622,11 @@
             
             const slideContent = document.createElement('div');
             slideContent.className = 'slide-content';
+            
+            // Add edit indicator
+            const editIndicator = document.createElement('div');
+            editIndicator.className = 'slide-edit-indicator';
+            editIndicator.textContent = '✏️ Hover over text to edit';
             
             // Check if content is HTML (from generate_slide tool)
             if (slideData.content.includes('<html>') || slideData.content.includes('<!DOCTYPE')) {
@@ -446,11 +644,12 @@
                 iframe.srcdoc = slideData.content;
                 iframe.style.border = 'none';
                 iframe.style.opacity = '0';
+                iframe.setAttribute('data-slide-number', slideData.slide_number);
                 
                 iframeContainer.appendChild(iframe);
                 slideContent.appendChild(iframeContainer);
                 
-                // Scale iframe after it's loaded
+                // Scale iframe and inject editing functionality after it's loaded
                 iframe.onload = () => {
                     setTimeout(() => {
                         const containerWidth = iframeContainer.offsetWidth;
@@ -490,6 +689,9 @@
                         iframe.style.transition = 'opacity 0.3s ease';
                         loadingDiv.style.display = 'none';
                         
+                        // Inject inline editing functionality into iframe
+                        injectInlineEditingToIframe(iframe, slideData.slide_number);
+                        
                         console.log(`Scaled slide ${slideData.slide_number} by ${scale.toFixed(3)} (${scaledWidth}x${scaledHeight} in ${containerWidth}x${containerHeight})`);
                     }, 100);
                 };
@@ -501,9 +703,200 @@
             
             slideDiv.appendChild(slideHeader);
             slideDiv.appendChild(slideContent);
+            slideDiv.appendChild(editIndicator);
             
             slidesContainer.appendChild(slideDiv);
             slidesContainer.scrollTop = slidesContainer.scrollHeight;
+        }
+
+        function updateSlideContent(slideData) {
+            const slideDiv = document.querySelector(`[data-slide-number="${slideData.slide_number}"]`);
+            if (slideDiv) {
+                const iframe = slideDiv.querySelector('iframe');
+                if (iframe) {
+                    iframe.srcdoc = slideData.content;
+                    // Re-inject editing functionality after content update
+                    iframe.onload = () => {
+                        setTimeout(() => {
+                            injectInlineEditingToIframe(iframe, slideData.slide_number);
+                        }, 100);
+                    };
+                    console.log(`Updated slide ${slideData.slide_number} content`);
+                }
+            }
+        }
+
+        function injectInlineEditingToIframe(iframe, slideNumber) {
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                // Add CSS for inline editing
+                const style = iframeDoc.createElement('style');
+                style.textContent = `
+                    .editable-text {
+                        position: relative;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    }
+                    
+                    .editable-text:hover {
+                        background-color: rgba(0, 123, 255, 0.1) !important;
+                        outline: 2px dashed #007bff;
+                        outline-offset: 2px;
+                    }
+                    
+                    .edit-button-inline {
+                        position: absolute;
+                        top: -25px;
+                        right: -5px;
+                        background: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        padding: 4px 8px;
+                        font-size: 10px;
+                        cursor: pointer;
+                        opacity: 0;
+                        transition: opacity 0.2s ease;
+                        z-index: 1000;
+                        pointer-events: none;
+                    }
+                    
+                    .editable-text:hover .edit-button-inline {
+                        opacity: 1;
+                        pointer-events: auto;
+                    }
+                    
+                    .edit-button-inline:hover {
+                        background: #0056b3;
+                    }
+                `;
+                iframeDoc.head.appendChild(style);
+                
+                // Find all text elements and make them editable
+                const textElements = iframeDoc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, li, td, th');
+                
+                textElements.forEach((element, index) => {
+                    // Skip elements that are too small or empty
+                    const text = element.textContent.trim();
+                    if (text.length < 3) return;
+                    
+                    // Skip elements that contain other text elements (to avoid nested editing)
+                    const hasTextChildren = element.querySelector('h1, h2, h3, h4, h5, h6, p, span, div, li, td, th');
+                    if (hasTextChildren) return;
+                    
+                    // Make element editable
+                    element.classList.add('editable-text');
+                    element.setAttribute('data-text-id', index);
+                    
+                    // Add edit button
+                    const editBtn = iframeDoc.createElement('button');
+                    editBtn.className = 'edit-button-inline';
+                    editBtn.textContent = '✏️';
+                    editBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        
+                        // Communicate with parent window
+                        window.parent.postMessage({
+                            type: 'edit_text',
+                            slideNumber: slideNumber,
+                            textId: index,
+                            originalText: text,
+                            element: element.tagName.toLowerCase()
+                        }, '*');
+                    };
+                    
+                    element.style.position = 'relative';
+                    element.appendChild(editBtn);
+                });
+                
+                console.log(`Injected inline editing for slide ${slideNumber} - ${textElements.length} text elements`);
+                
+            } catch (error) {
+                console.error('Error injecting inline editing:', error);
+            }
+        }
+
+        function openTextEditor(slideNumber, textId, originalText, elementType) {
+            currentEditingSlide = slideNumber;
+            currentEditingElement = textId;
+            originalTextContent = originalText;
+            
+            // Set the text content in the editor
+            textEditorTextarea.value = originalText;
+            
+            // Update modal title
+            const modalTitle = document.querySelector('.text-editor-header h3');
+            modalTitle.textContent = `Edit ${elementType.toUpperCase()} Text`;
+            
+            textEditorModal.style.display = 'flex';
+            textEditorTextarea.focus();
+            textEditorTextarea.select();
+            
+            console.log(`Opening editor for slide ${slideNumber}, element ${textId}: "${originalText}"`);
+        }
+
+        function closeTextEditor() {
+            textEditorModal.style.display = 'none';
+            currentEditingSlide = null;
+            currentEditingElement = null;
+            originalTextContent = null;
+            textEditorTextarea.value = '';
+        }
+
+        function saveTextEdit() {
+            if (currentEditingSlide === null || currentEditingElement === null) return;
+            
+            const newTextContent = textEditorTextarea.value.trim();
+            if (!newTextContent) {
+                alert('Please enter some text content.');
+                return;
+            }
+            
+            // Show saving indicator
+            const slideDiv = document.querySelector(`[data-slide-number="${currentEditingSlide}"]`);
+            if (slideDiv) {
+                slideDiv.classList.add('slide-saving');
+                
+                // Add editing indicator
+                const existingIndicator = slideDiv.querySelector('.editing-indicator');
+                if (existingIndicator) {
+                    existingIndicator.remove();
+                }
+                
+                const editingIndicator = document.createElement('div');
+                editingIndicator.className = 'editing-indicator';
+                editingIndicator.textContent = 'Saving...';
+                slideDiv.appendChild(editingIndicator);
+            }
+            
+            // Send edit request to backend
+            socket.emit('edit_text', {
+                slide_number: currentEditingSlide,
+                text_id: currentEditingElement,
+                new_text: newTextContent,
+                original_text: originalTextContent
+            });
+            
+            closeTextEditor();
+            addChatMessage('system', `Saving text changes to slide ${currentEditingSlide}...`);
+        }
+
+        function extractTextFromHtml(htmlContent) {
+            // Create a temporary div to parse HTML and extract text
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlContent;
+            
+            // Remove script and style tags
+            const scripts = tempDiv.querySelectorAll('script, style');
+            scripts.forEach(script => script.remove());
+            
+            // Get text content and clean it up
+            const textContent = tempDiv.textContent || tempDiv.innerText || '';
+            
+            // Clean up the text (remove extra whitespace, etc.)
+            return textContent.replace(/\s+/g, ' ').trim();
         }
 
         function updateStatus(message) {
@@ -553,6 +946,21 @@
 
         messageInput.addEventListener('input', () => {
             sendButton.disabled = !messageInput.value.trim() || isGenerating;
+        });
+
+        // Close modal when clicking outside
+        textEditorModal.addEventListener('click', (e) => {
+            if (e.target === textEditorModal) {
+                closeTextEditor();
+            }
+        });
+
+        // Listen for messages from iframes
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'edit_text') {
+                const { slideNumber, textId, originalText, element } = event.data;
+                openTextEditor(slideNumber, textId, originalText, element);
+            }
         });
 
         // Initialize UI

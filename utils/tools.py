@@ -382,6 +382,86 @@ html<!DOCTYPE html>
         logger.error(f"Failed to generate slide #{slide_number}: {str(e)}", exc_info=True)
         return f"Failed to generate slide #{slide_number}: {str(e)}"
     
+@tool
+def update_slide(slide_number: int, new_content: str, original_html: str, preserve_design: bool = True) -> str:
+    """Update an existing slide with new content while optionally preserving the original design.
+    
+    Args:
+        slide_number: The slide number to update
+        new_content: The new text content for the slide
+        original_html: The original HTML content of the slide
+        preserve_design: Whether to preserve the original design and styling
+    """
+    try:
+        logger.info(f"update_slide tool called for slide #{slide_number}")
+        
+        if preserve_design:
+            # Use AI to intelligently update the slide while preserving design
+            rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
+            html_rules = ""
+            try:
+                with open(rules_html_path, "r", encoding="utf-8") as f:
+                    html_rules = f.read()
+            except FileNotFoundError:
+                html_rules = "<!-- HTML rules not found -->"
+            
+            update_prompt = f"""
+You are a professional slide content editor. Update the existing slide with new content while maintaining the exact same design, layout, and visual styling.
+
+ORIGINAL SLIDE HTML:
+{original_html}
+
+NEW CONTENT TO INCORPORATE:
+{new_content}
+
+DESIGN PRESERVATION RULES:
+{html_rules}
+
+CRITICAL REQUIREMENTS:
+1. Maintain EXACT same color scheme, fonts, and visual hierarchy
+2. Keep the same HTML structure and CSS classes
+3. Preserve all images, charts, and visual elements
+4. Only change the text content, not the design
+5. Ensure content fits within existing layout constraints
+6. Maintain 1280x720px slide dimensions
+7. If new content is longer/shorter, adjust text sizing appropriately but keep layout structure
+
+OUTPUT: Return only the complete updated HTML code with new content but preserved design.
+"""
+            
+            response = LLM_claude.invoke(update_prompt)
+            updated_html = response.content if hasattr(response, 'content') else str(response)
+            
+            # Extract HTML content
+            start_marker = "<!DOCTYPE html>"
+            end_marker = "</html>"
+            start_idx = updated_html.find(start_marker)
+            end_idx = updated_html.find(end_marker)
+            if start_idx != -1 and end_idx != -1:
+                updated_html = updated_html[start_idx:end_idx + len(end_marker)]
+            
+        else:
+            # Create a completely new slide with the new content
+            return generate_slide.invoke({
+                "slide_number": slide_number,
+                "instructions": new_content,
+                "images_urls": "[]",
+                "style": "modern, professional presentation style",
+                "content": new_content
+            })
+        
+        # Save the updated slide
+        output_path = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_number:03d}.html")
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(updated_html)
+            
+        logger.info(f"Successfully updated slide #{slide_number}")
+        return updated_html
+        
+    except Exception as e:
+        logger.error(f"Failed to update slide #{slide_number}: {str(e)}", exc_info=True)
+        return f"Failed to update slide #{slide_number}: {str(e)}"
+
 if __name__ == "__main__":
     rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
     with open(rules_html_path, "r", encoding="utf-8") as f:

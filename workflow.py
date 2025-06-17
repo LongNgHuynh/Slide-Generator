@@ -90,13 +90,13 @@ class Router(TypedDict):
     next: Literal[*options]
 
 outline_agent = create_react_agent(
-    model=LLM,
+    model=LLM_4o,  # Use GPT-4o for better ReAct agent compatibility
     tools=[image_search, crawl_url, web_search],
     prompt=prompt_system_outline
 )
 
 slide_agent = create_react_agent(
-    model=LLM,
+    model=LLM_4o,  # Use GPT-4o for better ReAct agent compatibility
     tools=[generate_slide], # generate_slide tool is now globally defined
     prompt=prompt_system_slide
 )
@@ -201,11 +201,13 @@ def supervisor_node(state: AgentState) -> Command[Literal[*members, "__end__"]]:
 
     MAX_OUTLINE_ATTEMPTS = 3
 
-    # Check for completion signals
-    if "finish" in last_message_content.lower() or "completed" in last_message_content.lower():
-        if last_message_sender == "slide_agent" or current_slides:
-             logger.info("Supervisor: Detected completion signal. Routing to FINISH.")
-             return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
+    # Check for specific completion signals - only from slide_agent and only with actual completion phrases
+    completion_phrases = ["presentation completed", "slide generation completed", "workflow completed", "all slides generated"]
+    has_completion_signal = any(phrase in last_message_content.lower() for phrase in completion_phrases)
+    
+    if has_completion_signal and last_message_sender == "slide_agent" and current_slides:
+        logger.info("Supervisor: Detected specific completion signal from slide_agent. Routing to FINISH.")
+        return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
 
     # Check if we've reached max attempts for outline generation
     if not is_outline_generated_flag and outline_attempts >= MAX_OUTLINE_ATTEMPTS:
@@ -348,7 +350,7 @@ def planner_node(state: AgentState) -> Command[Literal["supervisor"]]:
     
     Return the plan in the expected JSON format with 'tasks' field containing an array of task objects."""
     
-    structured_llm = LLM.with_structured_output(Plan)
+    structured_llm = LLM_4o.with_structured_output(Plan)
     
     user_query = get_research_topic(state["messages"])
     
@@ -368,8 +370,8 @@ def planner_node(state: AgentState) -> Command[Literal["supervisor"]]:
     
     plan = structured_llm.invoke(full_prompt, config=current_config)
     
-    # Convert plan to string for message content
-    plan_content = f"Generated plan with {len(plan.tasks)} tasks: {[task.description for task in plan.tasks]}"
+    # Convert plan to string for message content - avoid completion keywords
+    plan_content = f"Created workflow plan with {len(plan.tasks)} tasks: {[task.description for task in plan.tasks]}"
     
     # Update the state with the generated plan
     return Command(
@@ -512,7 +514,7 @@ def artist_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     elif langfuse_handler not in current_config.get("callbacks",[]):
         current_config["callbacks"] = current_config.get("callbacks", []) + [langfuse_handler]
     
-    response = LLM.invoke(prompt_system, config=current_config)
+    response = LLM_4o.invoke(prompt_system, config=current_config)
     
     # Extract string content from the LLM response
     if hasattr(response, 'content'):
