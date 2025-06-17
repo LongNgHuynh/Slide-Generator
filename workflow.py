@@ -43,11 +43,13 @@ langfuse = Langfuse(
     host="https://cloud.langfuse.com"
 )
 
-langfuse_handler = CallbackHandler(
-    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-    host="https://cloud.langfuse.com"
-)
+# Temporarily disable Langfuse to avoid callback errors
+# langfuse_handler = CallbackHandler(
+#     secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+#     public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+#     host="https://cloud.langfuse.com"
+# )
+langfuse_handler = None
 
 trace_id = str(uuid.uuid4())
 # Base configuration
@@ -56,7 +58,7 @@ config = {
     "configurable": {
         "trace_id": trace_id
     },
-    "callbacks": [langfuse_handler],
+    "callbacks": [],  # Disabled langfuse_handler
     "run_id": trace_id
 }
 
@@ -221,7 +223,8 @@ def supervisor_node(state: AgentState) -> Command[Literal[*members, "__end__"]]:
     # Follow planner logic: Check what's available and route to next needed agent
     
     # 1. If no plan exists yet, start with planner (only for initial message)
-    if not any(hasattr(msg, 'name') and msg.name == "planner" for msg in state["messages"]):
+    current_plan = state.get("plan", {})
+    if not current_plan and not any(hasattr(msg, 'name') and msg.name == "planner" for msg in state["messages"]):
         logger.info("Supervisor: No plan found. Routing to planner.")
         return Command(goto="planner", update={"next": "planner", "outline_attempts": outline_attempts})
     
@@ -361,12 +364,7 @@ def planner_node(state: AgentState) -> Command[Literal["supervisor"]]:
     
     current_config = RunnableConfig()
     current_config.update(config)
-    if langfuse_handler and hasattr(langfuse_handler, 'current_run_tree') and langfuse_handler.current_run_tree:
-        current_config["configurable"]["run_tree"] = langfuse_handler.current_run_tree
-    if not current_config.get("callbacks") and langfuse_handler:
-        current_config["callbacks"] = [langfuse_handler]
-    elif langfuse_handler not in current_config.get("callbacks",[]):
-        current_config["callbacks"] = current_config.get("callbacks", []) + [langfuse_handler]
+    current_config["callbacks"] = []
     
     plan = structured_llm.invoke(full_prompt, config=current_config)
     
@@ -390,12 +388,7 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     
     current_config = RunnableConfig()
     current_config.update(config) 
-    if langfuse_handler and hasattr(langfuse_handler, 'current_run_tree') and langfuse_handler.current_run_tree:
-        current_config["configurable"]["run_tree"] = langfuse_handler.current_run_tree
-    if not current_config.get("callbacks") and langfuse_handler:
-        current_config["callbacks"] = [langfuse_handler]
-    elif langfuse_handler not in current_config.get("callbacks",[]):
-        current_config["callbacks"] = current_config.get("callbacks", []) + [langfuse_handler]
+    current_config["callbacks"] = []
 
     result = outline_agent.invoke(agent_input, config=current_config)
     
@@ -507,12 +500,7 @@ def artist_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     
     current_config = RunnableConfig()
     current_config.update(config)
-    if langfuse_handler and hasattr(langfuse_handler, 'current_run_tree') and langfuse_handler.current_run_tree:
-        current_config["configurable"]["run_tree"] = langfuse_handler.current_run_tree
-    if not current_config.get("callbacks") and langfuse_handler:
-        current_config["callbacks"] = [langfuse_handler]
-    elif langfuse_handler not in current_config.get("callbacks",[]):
-        current_config["callbacks"] = current_config.get("callbacks", []) + [langfuse_handler]
+    current_config["callbacks"] = []
     
     response = LLM_4o.invoke(prompt_system, config=current_config)
     
@@ -625,12 +613,7 @@ IMPORTANT: When calling `generate_slide`, the `instructions` argument to the too
     
     current_config = RunnableConfig()
     current_config.update(config)
-    if langfuse_handler and hasattr(langfuse_handler, 'current_run_tree') and langfuse_handler.current_run_tree:
-        current_config["configurable"]["run_tree"] = langfuse_handler.current_run_tree
-    if not current_config.get("callbacks") and langfuse_handler:
-        current_config["callbacks"] = [langfuse_handler]
-    elif langfuse_handler not in current_config.get("callbacks",[]):
-        current_config["callbacks"] = current_config.get("callbacks", []) + [langfuse_handler]
+    current_config["callbacks"] = []
 
     # Assuming slide_agent is a globally defined ReAct agent similar to outline_agent
     result = slide_agent.invoke(agent_invoke_state, config=current_config)

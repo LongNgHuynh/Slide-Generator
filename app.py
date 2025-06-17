@@ -491,13 +491,16 @@ def slide_agent_node_with_streaming(state, callback, session_id):
     
     logger.info("Slide agent with streaming: Starting slide generation")
     
-    # Get the outline content
-    actual_outline_str = ""
-    if state.get("messages"):
-        for msg in reversed(state["messages"]):
-            if hasattr(msg, 'name') and msg.name == "outline_agent":
-                actual_outline_str = msg.content
-                break
+    # Get the outline content from state (preferred) or messages (fallback)
+    actual_outline_str = state.get("outline_content", "")
+    
+    # Fallback: check messages if outline_content is not in state
+    if not actual_outline_str:
+        if state.get("messages"):
+            for msg in reversed(state["messages"]):
+                if hasattr(msg, 'name') and msg.name == "outline_agent":
+                    actual_outline_str = msg.content
+                    break
     
     if not actual_outline_str:
         actual_outline_str = "Outline not available."
@@ -691,4 +694,5 @@ def slide_agent_node_with_streaming(state, callback, session_id):
     })()
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    # Disable auto-reloader to avoid Windows socket issues
+    socketio.run(app, debug=False, host='0.0.0.0', port=5000, use_reloader=False)
