@@ -161,6 +161,9 @@ dmypy.json
 #images
 /data
 
+*.txt
+/images
+
 .langgraph_api/
 
 # generated files

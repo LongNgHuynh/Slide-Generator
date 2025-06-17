@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from utils.search import Searxng
-from models.LLMs import GPT_4o, GPT_o3
+from models.LLMs import GPT_4o, GPT_o3, Gemini, Claude_3_7_Sonnet
 from pydantic import BaseModel
 import requests
 from bs4 import BeautifulSoup
@@ -18,8 +18,10 @@ logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = os.path.join(os.getcwd(), "semi_output")
 GENERATED_SLIDES_DIR = os.path.join(os.getcwd(), "generated_slides")
-LLM = GPT_4o()
-gpt_o3 = GPT_o3()
+LLM_4o = GPT_4o()
+LLM_o3 = GPT_o3()
+LLM_claude = Claude_3_7_Sonnet()
+LLM = Gemini()
 
 # Create output directories if they don't exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -48,25 +50,37 @@ class PresentationQuery(BaseModel):
 @tool
 def image_search(search_query: str) -> dict:
     """
-    Search for images based on a query.
+    Search for images based on a query and download them to a timestamped folder.
     
     Args:
         search_query: The query string to search for images
-        searcher: Searxng instance to use for searching
         
     Returns:
-        Dictionary with search results including image URLs
+        Dictionary with search results including image URLs and local paths
     """
     logger.info(f"Starting image search for query: {search_query}")
     try:
+        # Create timestamp for folder name
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        images_root = os.path.join(os.getcwd(), "images")
+        download_folder = os.path.join(images_root, f"folder_{timestamp}")
+        
+        # Create directories if they don't exist
+        os.makedirs(download_folder, exist_ok=True)
+        
+        # Create list.txt file
+        list_file_path = os.path.join(download_folder, "image_lists.txt")
+        
         searcher: Searxng = Searxng()
         results = json.loads(
             searcher.image_search(search_query, max_results=10)
         )["results"]
                 
-        # Extract only the required fields
+        # Extract only the required fields and download images
         filtered_results = []
+        downloaded_images = []
         timeout = 5
+        
         for idx, item in enumerate(results, 1):
             url = item.get("img_src", "")
             # Ensure URL has proper scheme
@@ -74,49 +88,75 @@ def image_search(search_query: str) -> dict:
                 url = "https:" + url
             elif not url.startswith(("http://", "https://")):
                 url = "https://" + url
+                
             try:
-                # Send a HEAD request first (faster than GET since it doesn't download the content)
-                logger.debug(f"Sending HEAD request to {url}")
-                response = requests.head(url, timeout=timeout)
-                is_valid_image = False
-                
-                # Check if response is successful and content-type indicates an image
+                # Download the image directly
+                response = requests.get(url, timeout=timeout, stream=True)
                 if response.status_code == 200:
+                    # Get file extension from content type or URL
                     content_type = response.headers.get('Content-Type', '')
-                    if content_type.startswith('image/'):
-                        is_valid_image = True
+                    ext = content_type.split('/')[-1] if content_type else url.split('.')[-1]
+                    if not ext or len(ext) > 4:  # If no valid extension found, default to jpg
+                        ext = 'jpg'
                     
-                # If HEAD request doesn't work or doesn't confirm it's an image, try GET
-                if not is_valid_image:
-                    response = requests.get(url, timeout=timeout, stream=True)
-                    if response.status_code == 200:
-                        content_type = response.headers.get('Content-Type', '')
-                        if content_type.startswith('image/'):
-                            is_valid_image = True
-                
-                # Append only if image is valid
-                if is_valid_image:
+                    # Create image filename
+                    image_filename = f"image_{idx}.{ext}"
+                    image_path = os.path.join(download_folder, image_filename)
+                    
+                    # Download and save the image
+                    with open(image_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                    
+                    # Add to downloaded images list
+                    downloaded_images.append({
+                        "filename": image_filename,
+                        "url": url,
+                        "title": item.get("title", ""),
+                        "content": item.get("content", ""),
+                        "resolution": item.get("resolution", "")
+                    })
+                    
+                    # Create relative path from generated_slides directory to the image
+                    rel_path = os.path.join(GENERATED_SLIDES_DIR, image_filename)
+                    
                     filtered_item = {
                         "title": item.get("title", ""),
                         "content": item.get("content", ""),
                         "img_src": url,
+                        "relative_path": rel_path,
                         "resolution": item.get("resolution", "")
                     }
                     filtered_results.append(filtered_item)
                     
             except (requests.RequestException, requests.ConnectionError, 
                     requests.Timeout, requests.TooManyRedirects) as e:
-                logger.error(f"Error checking URL {url}: {str(e)}")
+                logger.error(f"Error checking/downloading URL {url}: {str(e)}")
                 continue
+        
+        # Save list of successfully downloaded images
+        with open(list_file_path, "w", encoding="utf-8") as f:
+            for img in downloaded_images:
+                f.write(f"Filename: {img['filename']}\n")
+                f.write(f"URL: {img['url']}\n")
+                f.write(f"Title: {img['title']}\n")
+                f.write(f"Content: {img['content']}\n")
+                f.write(f"Resolution: {img['resolution']}\n")
+                f.write("-" * 50 + "\n")
         
         # Create an image search record
         image_record = {
             "query": search_query,
+            "timestamp": timestamp,
+            "download_folder": download_folder,
             "results": filtered_results
         }
+        
         with open(os.path.join(OUTPUT_DIR, "image_search_record.json"), "w", encoding="utf-8") as f:
             json.dump(image_record, f)
-        logger.info(f"Image search completed. Found {len(filtered_results)} valid images")
+            
+        logger.info(f"Image search completed. Downloaded {len(filtered_results)} images to {download_folder}")
         
         return image_record
     
@@ -217,6 +257,13 @@ def generate_slide(slide_number: int, instructions: str, images_urls: str, style
     """Generate a single HTML slide and save it to the file system.
     The 'instructions' argument should contain ALL text, data, and specific guidance for this slide's content, 
     including any relevant research information or outline points.
+    
+    Args:
+        slide_number: The slide number
+        instructions: Detailed instructions for the slide content
+        images_urls: JSON string or text containing image URLs and/or local paths with relative paths
+        style: The style for the slide
+        content: The main content for the slide
     """
     try:
         logger.info(f"generate_slide tool called for slide #{slide_number}")
@@ -235,134 +282,65 @@ def generate_slide(slide_number: int, instructions: str, images_urls: str, style
         presentation_prompt = f"""
 You are a professional presentation designer specializing in Material Design principles.
 
-Base HTML structure/rules to consider: 
-{html_rules}
+This is example of a slide: {html_rules}
+You should ingore all previous instructions and examples.
 
-Image URL(s) to incorporate if relevant (use your judgment based on instructions):
+Available Images to incorporate if relevant (use your judgment based on instructions):
 {images_urls}
+
+IMPORTANT IMAGE USAGE NOTES:
+- Images may include both web URLs (http/https) and local relative paths.
+- For local images, use the 'relative_path' when available, as these are downloaded and more reliable.
+- Always include fallback handling (e.g., alt text) for images that might fail to load.
+- Prefer local relative paths over web URLs for reliability.
 
 Design parameters for this slide:
 Style: {style}
 Content: {content}
 
-Core content and detailed instructions for THIS SPECIFIC SLIDE (this includes all text, data, and layout guidance):
+Core content and detailed instructions for THIS SPECIFIC SLIDE (text, layout, etc.):
 {instructions}
 
-Your task is to generate the complete HTML for this single slide following Material Design principles.
+== DESIGN & LAYOUT GUIDELINES ==
+You must create a complete, visually rich HTML slide using Tailwind CSS. All content must be wrapped in a responsive `<div>` (or `<section>`) that splits content into multiple columns or rows as needed.
 
-## Technical Specifications:
-- **Dimensions**: width: 1280px; min-height: 720px; position: relative; overflow: hidden;
-- **Material Design Framework**: Implement Google's Material Design 3 principles
-- **Multi-column Layout**: Intelligently distribute content across columns based on content length and type
-- **Image Handling**: All images must be wrapped in dedicated div containers with proper Material Design styling
+DO NOT use black (#000000) or white (#FFFFFF) as background. Instead:
+- Use soft, rich, or vibrant **solid colors** that harmonize with the topic and style
+- Suggested palettes: `#fef6e4`, `#e0f2f1`, `#ede7f6`, `#e3f2fd`, `#f3e5f5`, `#fff3e0`, `#e8f5e9`
+- Ensure **high contrast** for readability (background vs text)
 
-## Material Design Requirements:
-- **Typography**: Use Material Design typography scale (Roboto font family)
-- **Color System**: Implement Material Design color tokens and elevation system
-- **Spacing**: Follow 8dp grid system for consistent spacing
-- **Shadows & Elevation**: Use appropriate Material Design shadow levels (elevation 0-24)
-- **Rounded Corners**: Apply Material Design border radius (4dp, 8dp, 12dp, 16dp)
-- **Component Styling**: Use Material Design component patterns (cards, buttons, chips, etc.)
+== SLIDE CONTAINER ==
+- Use a fixed wrapper: `width: 1280px; min-height: 720px; position: relative; overflow: hidden;`
+- Inside, create a structured, responsive layout with grid or flex
+- Scale appropriately: 
+  - If content is short, use **1 centered column**
+  - If content is long, split into **2+ columns** or sections based on logical grouping
 
-## Layout Structure:
-- **Multi-column Logic**:
-  - Short content (< 200 words): Single column with generous spacing
-  - Medium content (200-500 words): Two-column layout
-  - Long content (> 500 words): Three-column layout or structured sections
-  - Mixed content: Asymmetrical columns based on content hierarchy
+== COMPONENT STYLING ==
+- Always use:
+  - Google Fonts (Roboto preferred)
+  - Tailwind CSS
+  - Font Awesome icons (if relevant)
+  - Chart.js for data visualization (if data is included)
+- Add icons where visually appropriate
+- Text:
+  - Use large, bold font for emphasis or headings
+  - Use Tailwind utility classes to highlight important sections
+- Images:
+  - Must be wrapped in `<section>` with consistent padding/margins
+  - Properly sized: not oversized or undersized; maintain visual harmony
 
-## Image Handling Requirements:
-- **Mandatory Container**: ALL images must be wrapped in `<div class="material-image-container">`
-- **Responsive Scaling with Height Control**: Images must scale responsively using Tailwind classes:
-  - `w-full h-auto` for full-width responsive images
-  - `max-h-96` or `max-h-80` to prevent excessive height (adjust based on content)
-  - `object-cover` or `object-contain` for proper aspect ratio handling
-  - `max-w-full` to prevent overflow
-- **Height Constraints by Content Type**:
-  - Small images: `max-h-48` (192px)
-  - Medium images: `max-h-64` (256px) 
-  - Large images: `max-h-80` (320px)
-  - Hero-style images: `max-h-96` (384px)
-- **Material Design Styling**: Apply Material Design elevation and corners:
-  - `shadow-md rounded-lg` for standard elevation
-  - `shadow-lg rounded-xl` for emphasized images
-- **Responsive Breakpoints**: Use Tailwind responsive prefixes for different screen sizes:
-  - `sm:max-h-32 md:max-h-48 lg:max-h-64` for adaptive height sizing
-  - `sm:w-1/2 md:w-1/3 lg:w-1/4` for adaptive width sizing
-- **Example Structure**:
-```html
-<div class="material-image-container shadow-md rounded-lg overflow-hidden max-w-md mx-auto">
-    <img src="image-url" alt="description" class="w-full h-auto max-h-64 object-cover">
-</div>
-Content Organization:
+== SLIDE PRESENTATION ==
+- Make sure the final HTML:
+  - Is complete and standalone
+  - Contains clean structure, responsive design
+  - Uses multi-column layout for dense content
+  - Never uses hero image or background image
+  - Has solid-color background only
+  - Looks like a high-quality, professional slide
 
-Header Section: Material Design app bar styling with title and optional subtitle
-Main Content: Organized in Material Design cards or sections
-Image Containers:
-
-Wrap ALL images in <div class="material-image-container"> with Material Design styling
-Apply appropriate elevation and rounded corners using Tailwind classes
-Include proper aspect ratio containers for responsive scaling
-Images must be responsive and scale properly across all screen sizes
-Use Tailwind responsive image classes: w-full h-auto object-cover or object-contain
-No hero background images - images should be content elements only
-
-
-Footer/Action Area: Material Design button styling if actions are needed
-
-Styling Requirements:
-
-CSS Framework: Use Tailwind CSS exclusively for all styling (no custom CSS)
-Typography:
-
-Headline: text-4xl md:text-5xl lg:text-6xl font-normal
-Subheading: text-xl md:text-2xl font-medium
-Body: text-base md:text-lg leading-relaxed
-Caption: text-sm text-gray-600
-
-
-Color Palette: Use Material Design color system
-
-Primary: Blue palette (blue-500, blue-600, etc.)
-Secondary: Teal palette
-Surface: Gray-50, White
-On-surface: Gray-900, Gray-700
-
-
-Spacing: Use consistent spacing scale (space-4, space-6, space-8, space-12, space-16)
-Cards: Use shadow-md, shadow-lg with rounded-lg or rounded-xl
-
-Interactive Elements:
-
-Hover States: Implement Material Design hover effects
-Focus States: Proper focus indicators for accessibility
-Transitions: Smooth transitions using duration-200 or duration-300
-
-Background Styling:
-
-Main Background: Solid Material Design surface color (never hero images)
-Section Backgrounds: Use Material Design surface variants and elevation
-Gradient Accents: Subtle Material Design inspired gradients only as accents
-
-Responsive Design:
-
-Breakpoints: sm:, md:, lg:, xl: for different screen sizes
-Typography: Responsive text sizing using Tailwind responsive prefixes
-Layout: Adaptive column layouts that stack on smaller screens
-Images: All images must use Material Design responsive scaling with controlled height using max-h-* classes and proper aspect ratios
-
-Charts and Data Visualization:
-
-Chart.js Integration: Use Chart.js for all data visualizations and charts
-Chart Styling: Apply Material Design color palette to Chart.js charts
-Responsive Charts: Ensure charts are responsive and properly sized within their containers
-Chart Types: Support bar, line, pie, doughnut, and other Chart.js chart types as needed
-Icons: Integrate Material Design Icons (Google Fonts Icons) where appropriate
-Charts: Use Chart.js exclusively for all data visualizations with Material Design color palette
-Accessibility: Proper ARIA labels, semantic HTML, and keyboard navigation support
-Motion: Subtle animations following Material Design motion principles
-
-Code Structure:
+== OUTPUT FORMAT ==
+Only generate full HTML code for the slide:
 html<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -377,14 +355,13 @@ html<!DOCTYPE html>
 <body>
     <div class="slide-container" style="width: 1280px; min-height: 720px; position: relative; overflow: hidden;">
         <!-- Material Design structured content here -->
-        <!-- Use Chart.js for any data visualizations -->
     </div>
 </body>
 </html>
-Generate only the complete HTML code for the slide, ensuring it follows all Material Design principles and multi-column layout requirements specified above.
 """
+
         
-        response = LLM.invoke(presentation_prompt) 
+        response = LLM_claude.invoke(presentation_prompt) 
         html_content = response.content if hasattr(response, 'content') else str(response)
         
         start_marker = "<!DOCTYPE html>"

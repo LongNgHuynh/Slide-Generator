@@ -9,17 +9,20 @@ from langgraph.graph import StateGraph, add_messages
 from utils.custom_output_parser import CustomOutputParser
 from langgraph.prebuilt import create_react_agent
 
-import uuid, json, os
-import requests, datetime, logging
+import uuid, json, os, logging
 from langchain_core.tools import tool
-from langgraph.prebuilt import InjectedState
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import MessagesState, END, START
 from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, AIMessage
 from langchain_core.messages import ToolMessage
+
 from utils.tools import image_search, web_search, crawl_url, generate_slide
+from prompt import prompt_system_outline, prompt_system_slide, planning_instructions, prompt_system_layout
+from utils.utils import get_research_topic
+from utils.schemas import SearchQueryList, Plan
+
 from langfuse import Langfuse
 from langfuse.callback import CallbackHandler
 import pprint
@@ -31,6 +34,8 @@ LLM_4o = GPT_4o()
 LLM_o3 = GPT_o3()
 LLM_claude = Claude_3_7_Sonnet()
 LLM = Gemini()
+
+memory = MemorySaver()
 
 langfuse = Langfuse(
     secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
@@ -71,87 +76,60 @@ class AgentState(TypedDict):
     is_outline_generated: bool
     images: list[dict]
     found_information: list[dict]
-    input: str
     slides: list[dict]
     summary: list[dict]
+    outline_content: str
+    layout_instructions: str
     outline_attempts: int
+    plan: dict
 
-members = ["outline_agent", "slide_agent"]
+members = ["planner", "outline_agent", "slide_agent", "artist_agent"]
 options = members + ["FINISH"]
 
 class Router(TypedDict):
     next: Literal[*options]
 
-prompt_template_outline = """You are a research assistant helping to create a numbered presentation outline on a given topic. Follow these steps carefully:
-Use web_search to gather recent and relevant information about the topic provided in the user message.
-If relevant URLs are found, use crawl_url to extract detailed content from them.
-Use image_search to locate high-quality and relevant images (include image URLs or descriptions for slide recommendations).
-
-Store all collected facts, data, quotes, image links, and relevant insights in a data bank — a structured internal reference you will use to build the outline.
-Using the data bank, generate a comprehensive, well-structured, and slide-numbered presentation outline.
-
-Data Bank (Internal Use)
-Store all gathered information here before building the outline. Include:
-Key facts and figures
-Quotes or excerpts from crawled URLs
-Image URLs and their captions
-Noteworthy charts/graphs or statistics
-Sources and links for the reference slide
-
-Final Output
-Your final output should consist only of the presentation outline text (no commentary or metadata).
-Each slide must be clearly numbered, with a title and bullet points or descriptions.
-
-While the total number of slides depends on the topic and user needs, the outline should generally include:
-Cover Slide (Title, Subtitle, optional image)
-Table of Contents
-Introduction Slide
-Main Content Slides (organized by subtopic)
-Key Points / Summary Slide
-Graphs and Charts Slide(s) (if applicable; describe what should be visualized)
-Conclusion Slide
-References Slide (sources used, include URLs)
-
-IMPORTANT:
-You MUST use web_search and image_search before generating the final outline.
-The data bank must be built first and used as a foundation.
-Slide numbers must be clearly included (e.g., “Slide 4: Economic Impact of Renewable Energy”)."""
-
 outline_agent = create_react_agent(
     model=LLM,
     tools=[image_search, crawl_url, web_search],
-    prompt=prompt_template_outline
+    prompt=prompt_system_outline
 )
-
-slide_agent_system_prompt = """You are an expert presentation slide generator. 
-Your task is to create multiple slides based on a provided presentation outline and other context like available images and research information. 
-You will be given a detailed task message which includes:
-1. The full PRESENTATION OUTLINE.
-2. A list of AVAILABLE IMAGES (URLs).
-3. A list of AVAILABLE RESEARCH INFORMATION (text snippets).
-4. GENERAL INSTRUCTIONS for slide generation (e.g., from rules/instruction.txt).
-
-Your strategy MUST be:
-1. Carefully analyze the entire PRESENTATION OUTLINE to understand the flow and content of all slides.
-2. For EACH section or point in the outline that should become a slide, you MUST call the `generate_slide` tool ONCE.
-3. When calling `generate_slide`:
-    a. `slide_number`: Assign a sequential number.
-    b. `instructions`: Provide VERY SPECIFIC instructions for THIS slide. This should include the exact text content for the slide (derived from the outline and research info), any data for charts, and guidance on layout or emphasis. Crucially, pass relevant parts of the AVAILABLE RESEARCH INFORMATION here.
-    c. `images_urls`: Select RELEVANT image URL(s) from the AVAILABLE IMAGES list for this specific slide, if any are appropriate. Pass as a JSON string like '[{"url":"..."}]'.
-    d. `style`: Define the CSS style for the slide.
-    e. `content`: Provide the content for the slide.
-4. Continue this process until all parts of the outline are covered by generated slides.
-Your final response after all tool calls should be a summary of the slides generated."""
 
 slide_agent = create_react_agent(
     model=LLM,
     tools=[generate_slide], # generate_slide tool is now globally defined
-    prompt=slide_agent_system_prompt
+    prompt=prompt_system_slide
 )
+
+def _detect_user_provided_content(messages: List[BaseMessage]) -> dict:
+    """
+    Detect if user has provided outline or layout content in their messages.
+    Returns a dict with flags for what content was provided.
+    """
+    user_content = ""
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            user_content += msg.content.lower()
+    
+    # Simple keyword detection for outline content
+    outline_keywords = ["slide 1:", "slide 2:", "outline:", "presentation outline", "table of contents"]
+    has_outline = any(keyword in user_content for keyword in outline_keywords)
+    
+    # Simple keyword detection for layout content  
+    layout_keywords = ["layout:", "design:", "positioning:", "visual hierarchy", "slide design"]
+    has_layout = any(keyword in user_content for keyword in layout_keywords)
+    
+    return {
+        "has_outline": has_outline,
+        "has_layout": has_layout,
+        "user_content": user_content[:200]  # First 200 chars for debugging
+    }
 
 def supervisor_node(state: AgentState) -> Command[Literal[*members, "__end__"]]:
     """
-    Router function that decides which agent should run next based on the current state.
+    Router function that decides which agent should run next based on the planner's logic.
+    Routes according to: planner → outline_agent → artist_agent → slide_agent → FINISH
+    Skips agents if their content is already provided by the user.
     
     Args:
         state: The current state of the workflow
@@ -159,107 +137,248 @@ def supervisor_node(state: AgentState) -> Command[Literal[*members, "__end__"]]:
     Returns:
         Command indicating which node to go to next
     """
-    logger.info("Supervisor node: Starting workflow routing")
+    logger.info("Supervisor node: Starting workflow routing based on planner logic")
     
     outline_attempts = state.get("outline_attempts", 0)
     is_outline_generated_flag = state.get("is_outline_generated", False)
     current_slides = state.get("slides")
+    layout_instructions = state.get("layout_instructions", "")
     last_message_obj = state["messages"][-1] if state["messages"] else None
     last_message_content = last_message_obj.content if last_message_obj else ""
     last_message_sender = getattr(last_message_obj, 'name', None) or (last_message_obj.type if last_message_obj else "")
 
     logger.debug(f"Current state: is_outline_generated={is_outline_generated_flag}, slides_present={bool(current_slides)}, outline_attempts={outline_attempts}, last_sender='{last_message_sender}'")
+    logger.debug(f"State details: outline_content_length={len(state.get('outline_content', ''))}, layout_instructions_length={len(layout_instructions)}, slides_count={len(current_slides) if current_slides else 0}")
+
+    # Check if this is a completely new topic/request vs a continuation/modification
+    human_messages = [msg for msg in state["messages"] if isinstance(msg, HumanMessage)]
+    agent_messages = [msg for msg in state["messages"] if hasattr(msg, 'name') and msg.name in members]
+    
+    # Only reset if we detect a DIFFERENT topic, not just any new user message
+    is_completely_new_topic = False
+    if (isinstance(last_message_obj, HumanMessage) and 
+        is_outline_generated_flag and 
+        layout_instructions and 
+        current_slides and
+        len(human_messages) > 1 and 
+        len(agent_messages) > 0):
+        
+        # Analyze if this is a new topic by comparing current request with previous topics
+        current_user_request = last_message_obj.content.lower()
+        
+        # Keywords that indicate a completely new presentation topic
+        new_topic_indicators = [
+            "new presentation", "different topic", "another presentation",
+            "new slides", "different slides", "create presentation about",
+            "make slides about", "generate presentation on"
+        ]
+        
+        # Check if the current request is about a significantly different topic
+        has_new_topic_keywords = any(indicator in current_user_request for indicator in new_topic_indicators)
+        
+        # Only reset if explicit keywords are found - remove the word overlap check for now
+        is_completely_new_topic = has_new_topic_keywords
+        
+        logger.debug(f"Topic analysis - Current: '{current_user_request[:50]}...', New topic indicators: {has_new_topic_keywords}")
+    
+    if is_completely_new_topic:
+        logger.info(f"Supervisor: Detected completely new topic after previous completion. Resetting state for new workflow.")
+        # Reset all workflow state for the new request but keep the message history
+        return Command(
+            update={
+                "is_outline_generated": False,
+                "outline_content": "",
+                "layout_instructions": "",
+                "slides": [],
+                "images": [],
+                "found_information": [],
+                "outline_attempts": 0,
+                "plan": {},
+                "next": "planner"
+            },
+            goto="planner"
+        )
 
     MAX_OUTLINE_ATTEMPTS = 3
 
+    # Check for completion signals
     if "finish" in last_message_content.lower() or "completed" in last_message_content.lower():
         if last_message_sender == "slide_agent" or current_slides:
              logger.info("Supervisor: Detected completion signal. Routing to FINISH.")
              return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
 
-    if not is_outline_generated_flag:
-        if outline_attempts >= MAX_OUTLINE_ATTEMPTS:
-            logger.warning(f"Supervisor: Max outline attempts ({MAX_OUTLINE_ATTEMPTS}) reached. Outline still not generated. Routing to FINISH.")
-            return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts + 1})
-        
-        logger.info("Supervisor: Outline is not generated.")
-        outline_attempts += 1
-        if last_message_sender != "outline_agent" or outline_attempts <= 1:
-            logger.info(f"Routing to outline_agent (attempt {outline_attempts}).")
-            return Command(goto="outline_agent", update={"next": "outline_agent", "outline_attempts": outline_attempts})
-
-    if is_outline_generated_flag and not current_slides:
-        if last_message_sender == "slide_agent" and "Error generating slides" in last_message_content:
-             logger.warning("Supervisor: Slide agent previously errored. Routing to FINISH to avoid loop.")
-             return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
-        else:
-            logger.info("Supervisor: Outline generated, no slides. Routing to slide_agent.")
-            return Command(goto="slide_agent", update={"next": "slide_agent", "outline_attempts": outline_attempts})
-
-    routing_prompt_template = PromptTemplate.from_template(
-        f"""You are a supervisor managing a team of agents: {', '.join(members)}.
-Given the current state and conversation history, decide which agent should act next or if the task is complete.
-The available options are: {', '.join(options)}.
-
-Conversation History (last few messages):
-{{chat_history}}
-
-User's initial request: {{input_request}}
-Outline Status: {{outline_status}} (Attempts: {{outline_attempts}})
-Slides Status: {{slides_status}}
-
-Key information:
-- If Outline Status is 'Not Generated' and attempts are low, 'outline_agent' is preferred.
-- If Outline Status is 'Not Generated' and attempts are high (e.g., >= {MAX_OUTLINE_ATTEMPTS}), consider 'FINISH' if it seems stuck.
-- If Outline Status is 'Generated' and Slides Status is 'None generated', 'slide_agent' is preferred.
-- If all tasks seem done or an agent is stuck, consider 'FINISH'.
-
-Based on this, which of the following should act next? Choose exactly one: {', '.join(options)}"""
-    )
-
-    chat_history_str = "\n".join([f"{msg.type} ({getattr(msg, 'name', 'user') if hasattr(msg, 'name') else msg.type}): {msg.content}" for msg in state["messages"][-5:]])
-    
-    prompt_input = {
-        "chat_history": chat_history_str,
-        "input_request": state.get("input", "N/A"),
-        "outline_status": "Generated" if is_outline_generated_flag else "Not Generated",
-        "slides_status": f"{len(current_slides) if current_slides else 0} slides generated" if current_slides is not None else "None generated",
-        "outline_attempts": outline_attempts
-    }
-    
-    formatted_prompt = routing_prompt_template.format(**prompt_input)
-    logger.info(f"Supervisor LLM routing prompt:\n{formatted_prompt}")
-    
-    try:
-        response = LLM.invoke(formatted_prompt, config=config)
-        next_node_str = response.content if hasattr(response, 'content') else str(response)
-        logger.info(f"Supervisor LLM raw response for routing: {next_node_str}")
-
-        cleaned_response = next_node_str.strip().replace("'", "").replace("\"", "")
-        chosen_option = None
-        for opt in options:
-            if opt.lower() in cleaned_response.lower():
-                chosen_option = opt
-                break
-        
-        if chosen_option:
-            logger.info(f"Supervisor LLM decided to route to: {chosen_option}")
-            return Command(goto=chosen_option, update={"next": chosen_option, "outline_attempts": outline_attempts})
-        else:
-            logger.warning(f"Supervisor LLM response '{cleaned_response}' didn't directly match options. Fallback needed.")
-            if not is_outline_generated_flag and outline_attempts < MAX_OUTLINE_ATTEMPTS:
-                 logger.info(f"Fallback: Routing to outline_agent (attempt {outline_attempts + 1})")
-                 return Command(goto="outline_agent", update={"next": "outline_agent", "outline_attempts": outline_attempts + 1})
-            elif is_outline_generated_flag and not current_slides:
-                logger.info("Fallback: Routing to slide_agent")
-                return Command(goto="slide_agent", update={"next": "slide_agent", "outline_attempts": outline_attempts})
-            else:
-                logger.error("Supervisor fallback failed or max attempts reached. Routing to FINISH.")
-                return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
-
-    except Exception as e:
-        logger.error(f"Error during supervisor LLM call: {e}. Routing to FINISH.")
+    # Check if we've reached max attempts for outline generation
+    if not is_outline_generated_flag and outline_attempts >= MAX_OUTLINE_ATTEMPTS:
+        logger.warning(f"Supervisor: Max outline attempts ({MAX_OUTLINE_ATTEMPTS}) reached. Routing to FINISH.")
         return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
+
+    # Detect if user has provided outline or layout content
+    user_content_detection = _detect_user_provided_content(state["messages"])
+    logger.debug(f"User content detection: {user_content_detection}")
+    
+    # Follow planner logic: Check what's available and route to next needed agent
+    
+    # 1. If no plan exists yet, start with planner (only for initial message)
+    if not any(hasattr(msg, 'name') and msg.name == "planner" for msg in state["messages"]):
+        logger.info("Supervisor: No plan found. Routing to planner.")
+        return Command(goto="planner", update={"next": "planner", "outline_attempts": outline_attempts})
+    
+    # 2. If no outline is generated yet, check if user provided it
+    if not is_outline_generated_flag:
+        if user_content_detection["has_outline"]:
+            logger.info("Supervisor: User provided outline content. Marking as generated and proceeding.")
+            # Extract outline from user messages
+            user_outline = ""
+            for msg in state["messages"]:
+                if isinstance(msg, HumanMessage):
+                    user_outline += msg.content + "\n"
+            
+            # Update state to mark outline as generated and proceed to artist_agent
+            return Command(
+                update={
+                    "is_outline_generated": True,
+                    "outline_content": user_outline,
+                    "messages": [AIMessage(content=f"Using user-provided outline: {user_outline[:100]}...", name="outline_agent")],
+                    "next": "artist_agent",
+                    "outline_attempts": outline_attempts
+                },
+                goto="artist_agent"
+            )
+        else:
+            logger.info(f"Supervisor: No outline generated. Routing to outline_agent (attempt {outline_attempts + 1}).")
+            return Command(goto="outline_agent", update={"next": "outline_agent", "outline_attempts": outline_attempts + 1})
+    
+    # 3. If outline exists but no layout instructions, check if user provided layout
+    if is_outline_generated_flag and not layout_instructions:
+        if user_content_detection["has_layout"]:
+            logger.info("Supervisor: User provided layout content. Using it and proceeding to slide_agent.")
+            # Extract layout from user messages
+            user_layout = ""
+            for msg in state["messages"]:
+                if isinstance(msg, HumanMessage) and any(keyword in msg.content.lower() for keyword in ["layout:", "design:", "positioning:"]):
+                    user_layout += msg.content + "\n"
+            
+            return Command(
+                update={
+                    "layout_instructions": user_layout,
+                    "messages": [AIMessage(content=f"Using user-provided layout: {user_layout[:100]}...", name="artist_agent")],
+                    "next": "slide_agent",
+                    "outline_attempts": outline_attempts
+                },
+                goto="slide_agent"
+            )
+        else:
+            # Check if artist_agent previously errored to avoid loops
+            if last_message_sender == "artist_agent" and ("Error" in last_message_content or "error" in last_message_content.lower()):
+                logger.warning("Supervisor: Artist agent previously errored. Routing to FINISH to avoid loop.")
+                return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
+            
+            logger.info("Supervisor: Outline generated, no layout instructions. Routing to artist_agent.")
+            return Command(goto="artist_agent", update={"next": "artist_agent", "outline_attempts": outline_attempts})
+    
+    # 4. If outline and layout exist but no slides, go to slide_agent
+    if is_outline_generated_flag and layout_instructions and not current_slides:
+        # Check if slide_agent previously errored to avoid loops
+        if last_message_sender == "slide_agent" and ("Error generating slides" in last_message_content or "error" in last_message_content.lower()):
+            logger.warning("Supervisor: Slide agent previously errored. Routing to FINISH to avoid loop.")
+            return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
+            
+        logger.info("Supervisor: Outline and layout generated, no slides. Routing to slide_agent.")
+        return Command(goto="slide_agent", update={"next": "slide_agent", "outline_attempts": outline_attempts})
+
+    # 5. If all components are ready (outline, layout, slides), finish
+    if is_outline_generated_flag and layout_instructions and current_slides:
+        logger.info("Supervisor: All components ready (outline, layout, slides). Routing to FINISH.")
+        return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
+    
+    # Fallback: if we reach here, something unexpected happened
+    logger.warning("Supervisor: Unexpected state reached. Routing to FINISH as fallback.")
+    return Command(goto="FINISH", update={"next": "FINISH", "outline_attempts": outline_attempts})
+    
+def planner_node(state: AgentState) -> Command[Literal["supervisor"]]:
+    """
+    Planner node that generates a plan based on the current state.
+    
+    Args:
+        state: The current state of the workflow
+        
+    Returns:
+        Command to update the state and proceed to supervisor
+    """
+    logger.info("Planner node: Starting planning process")
+    
+    prompt_system_planner = f"""You are a planning agent. Your task is to create a detailed plan for the next steps in the workflow based on the current state and conversation history.
+    
+    Available agents: {', '.join(members)}
+    
+    Agent roles:
+    - outline_agent: Researches information and generates a presentation outline with numbered slides
+    - artist_agent: Creates layout and design instructions for the presentation slides  
+    - slide_agent: Generates the actual presentation slides based on outline and layout
+    
+    Routing logic:
+    1. If user provided only a topic: outline_agent → artist_agent → slide_agent
+    2. If user provided topic + outline: artist_agent → slide_agent (skip outline_agent)
+    3. If user provided topic + outline + layout: slide_agent (skip outline_agent and artist_agent)
+    
+    Your task is to analyze what the user has provided and create a plan with the appropriate agent tasks.
+    
+    The plan should specify which agent will handle each step. Use these exact agent IDs in your tasks:
+    - "outline_agent" for research and outline generation
+    - "artist_agent" for layout and design instructions
+    - "slide_agent" for final slide generation
+    
+    Example plan format:
+    {{
+        "tasks": [
+            {{
+                "id": "outline_agent", 
+                "description": "Research [topic] and generate a detailed presentation outline with numbered slides"
+            }},
+            {{
+                "id": "artist_agent",
+                "description": "Create layout and design instructions for the presentation slides based on the outline"
+            }},
+            {{
+                "id": "slide_agent", 
+                "description": "Generate the final presentation slides using the outline, layout instructions, and research data"
+            }}
+        ]
+    }}
+    
+    Return the plan in the expected JSON format with 'tasks' field containing an array of task objects."""
+    
+    structured_llm = LLM.with_structured_output(Plan)
+    
+    user_query = get_research_topic(state["messages"])
+    
+    formatted_prompt = planning_instructions.format(user_query=user_query)
+    
+    # Create the full prompt combining system and task instructions
+    full_prompt = f"{prompt_system_planner}\n\n{formatted_prompt}"
+    
+    current_config = RunnableConfig()
+    current_config.update(config)
+    if langfuse_handler and hasattr(langfuse_handler, 'current_run_tree') and langfuse_handler.current_run_tree:
+        current_config["configurable"]["run_tree"] = langfuse_handler.current_run_tree
+    if not current_config.get("callbacks") and langfuse_handler:
+        current_config["callbacks"] = [langfuse_handler]
+    elif langfuse_handler not in current_config.get("callbacks",[]):
+        current_config["callbacks"] = current_config.get("callbacks", []) + [langfuse_handler]
+    
+    plan = structured_llm.invoke(full_prompt, config=current_config)
+    
+    # Convert plan to string for message content
+    plan_content = f"Generated plan with {len(plan.tasks)} tasks: {[task.description for task in plan.tasks]}"
+    
+    # Update the state with the generated plan
+    return Command(
+        update={
+            "messages": [AIMessage(content=plan_content, name="planner")],
+            "plan": plan.dict()
+        },
+        goto="supervisor"
+   )
 
 def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     logger.info("Outline agent: Starting outline generation")
@@ -343,6 +462,14 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
             extracted_outline_content = result.strip()
             agent_output_message_content = extracted_outline_content
             logger.info("Extracted outline content from agent result (plain string).")
+        else:
+            # Final fallback - use any meaningful content from the conversation
+            logger.warning("Outline agent: No content extracted from agent result. Using fallback extraction.")
+            user_query = get_research_topic(state["messages"])
+            if user_query.strip():
+                extracted_outline_content = f"Basic outline for: {user_query.strip()}\n\nSlide 1: Introduction\nSlide 2: Main Content\nSlide 3: Conclusion"
+                agent_output_message_content = extracted_outline_content
+                logger.info("Created basic outline as fallback.")
 
     is_generated = bool(extracted_outline_content.strip()) # Determine the boolean flag
 
@@ -351,15 +478,62 @@ def outline_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     
     return Command(
         update={
-            "messages": [HumanMessage(content=agent_output_message_content, name="outline_agent")],
+            "messages": [AIMessage(content=agent_output_message_content, name="outline_agent")],
             "is_outline_generated": is_generated, # Set the boolean flag
-            # The actual outline string is NOT directly in state, only in the message above.
+            "outline_content": extracted_outline_content,
             "images": images,
             "found_information": found_info,
             "outline_attempts": state.get("outline_attempts", 0) 
         },
         goto="supervisor"
     )
+    
+def artist_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
+    """
+    Agent that instructs the slide_agent positioning items in the presentation slides.
+    
+    Args:
+        state: The current state of the workflow
+        
+    Returns:
+        Command to update the state and proceed to supervisor
+    """
+    logger.info("Artist agent: Starting artist agent")
+    
+    outline_content = state.get("outline_content", "")
+    prompt_system = prompt_system_layout.format(outline_content=outline_content)
+    
+    current_config = RunnableConfig()
+    current_config.update(config)
+    if langfuse_handler and hasattr(langfuse_handler, 'current_run_tree') and langfuse_handler.current_run_tree:
+        current_config["configurable"]["run_tree"] = langfuse_handler.current_run_tree
+    if not current_config.get("callbacks") and langfuse_handler:
+        current_config["callbacks"] = [langfuse_handler]
+    elif langfuse_handler not in current_config.get("callbacks",[]):
+        current_config["callbacks"] = current_config.get("callbacks", []) + [langfuse_handler]
+    
+    response = LLM.invoke(prompt_system, config=current_config)
+    
+    # Extract string content from the LLM response
+    if hasattr(response, 'content'):
+        instructions_content = response.content
+    else:
+        instructions_content = str(response)
+    
+    logger.info(f"Artist agent: Generated layout instructions (length: {len(instructions_content)})")
+    
+    return Command(
+        update={
+            "messages": [AIMessage(content=instructions_content, name="artist_agent")],
+            "layout_instructions": instructions_content
+        },
+        goto="supervisor"
+    )
+
+    
+    
+    
+    
     
 def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     """
@@ -378,7 +552,7 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
     actual_outline_str = ""
     if state.get("messages"):
         for msg in reversed(state["messages"]):
-            if hasattr(msg, 'name') and msg.name == "outline_agent" and isinstance(msg, HumanMessage):
+            if hasattr(msg, 'name') and msg.name == "outline_agent" and isinstance(msg, AIMessage):
                 if isinstance(msg.content, str) and msg.content.strip():
                     actual_outline_str = msg.content
                     logger.info(f"Retrieved outline content from outline_agent's last message (length: {len(actual_outline_str)}).")
@@ -391,6 +565,7 @@ def slide_agent_node(state: AgentState) -> Command[Literal["supervisor"]]:
 
     images = state.get("images", [])
     found_info = state.get("found_information", [])
+    layout_instructions = state.get("layout_instructions", "")
     
     logger.debug(f"Images for slides: {images}")
     logger.debug(f"Found information for slides: {found_info}")
@@ -412,6 +587,9 @@ Your task is to create multiple slides based on the provided presentation outlin
 PRESENTATION OUTLINE:
 {actual_outline_str}
 
+LAYOUT INSTRUCTIONS:
+{layout_instructions}
+
 AVAILABLE IMAGES (use discretion, pick relevant ones per slide instruction):
 {images}
 
@@ -431,17 +609,10 @@ IMPORTANT: Generate slides one at a time, starting with slide 1.
 IMPORTANT: When calling `generate_slide`, the `instructions` argument to the tool should be very specific for THAT slide's content, drawing from the outline and research info.
 """
     
-    # Define the slide_agent (ReAct agent) locally or ensure it's passed/accessible
-    # For this example, let's assume slide_agent is defined globally like outline_agent
-    # If not, it would be: slide_agent = create_react_agent(model=LLM, tools=[generate_slide], prompt=react_agent_prompt_str)
-    
-    # Prepare state for invoking the react agent. It primarily uses messages for context.
-    # The prompt is now part of how the agent is created/configured, or passed via messages if it's a generic agent.
-    # For create_react_agent, the system prompt is usually set at creation.
-    # We will pass the react_agent_prompt_str as the main human message to kick off this specific task.
-    
+    # Prepare state for invoking the react agent
     current_task_messages = [
-        HumanMessage(content=react_agent_prompt_str) 
+        AIMessage(content=react_agent_prompt_str),
+        HumanMessage(content=get_research_topic(state["messages"]))
     ]
     # We can also include previous messages if they are relevant for the react agent beyond the prompt above
     # agent_invoke_state = {"messages": state["messages"] + current_task_messages} 
@@ -484,55 +655,19 @@ IMPORTANT: When calling `generate_slide`, the `instructions` argument to the too
     logger.info(f"Slide agent node: Generated {len(generated_slides_info)} slides. Final agent response: {agent_final_response_content[:100]}")
     return Command(
         update={
-            "messages": [HumanMessage(content=agent_final_response_content, name="slide_agent")],
+            "messages": [AIMessage(content=agent_final_response_content, name="slide_agent")],
             "slides": generated_slides_info # Update with info about generated slides
             # is_outline_generated and outline_attempts are not modified by this node directly
         },
         goto="supervisor"
     )
-        
-# def summarizer_node(state: AgentState) -> Command[Literal["supervisor"]]:
-#     """
-#     Agent that summarizes the presentation slides.
-    
-#     Args:
-#         state: The current state of the workflow
-#     """
-#     logger.info("Summarizer: Starting slide summarization")
-#     logger.debug(f"Input state: {state}")
-    
-#     slides = state["slides"]
-#     prompt = f"""
-#     You are a summarizer, tasked with summarizing the presentation slides.
-    
-#     This is the list of slides: {slides}
-#     Please summarize that which slides are need to enhance visual and which slides is not.
-#     """
-#     response = LLM.with_structured_output(Summarize).invoke(prompt)
-#     logger.info("Summarizer: Completed slide analysis")
-    
-#     summary_text = ""
-#     if isinstance(response, dict) and "slides" in response:
-#         for slide in response["slides"]:
-#             summary_text += f"Slide {slide['slide_number']}: {slide['summary']} - {'Needs visual enhancement' if slide['need_enhance_visual'] else 'Visuals are good'}\n"
-#             logger.info(f"Analyzed slide {slide['slide_number']}")
-#     else:
-#         summary_text = str(response)
-#         logger.warning("Received unexpected response format from summarizer")
-    
-#     logger.info("Summarizer: Completed all slide summaries")
-#     return Command(
-#         update={
-#             "messages": [HumanMessage(content=summary_text, name="summarizer")],
-#             "summary": summary_text
-#         },
-#         goto="supervisor"
-#     )
 
 # Create and configure the workflow graph
 graph = StateGraph(AgentState)
 graph.add_node("supervisor", supervisor_node)
+graph.add_node("planner", planner_node)
 graph.add_node("outline_agent", outline_agent_node)
+graph.add_node("artist_agent", artist_agent_node)
 graph.add_node("slide_agent", slide_agent_node)
 # graph.add_node("summarizer", summarizer_node)
 graph.add_edge(START, "supervisor")

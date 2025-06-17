@@ -77,7 +77,6 @@ def handle_message(data):
                 "is_outline_generated": False,
                 "images": [],
                 "found_information": [],
-                "input": message,
                 "slides": [],
                 "summary": [],
                 "outline_attempts": 0
