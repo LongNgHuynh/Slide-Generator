@@ -3,7 +3,8 @@ from langchain_openai import AzureChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 # from anthropic import AnthropicBedrock
-from langchain_aws import ChatBedrockConverse
+# from langchain_anthropic import ChatAnthropic
+from langchain_aws import ChatBedrock
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,20 +28,33 @@ class GPT_o3(AzureChatOpenAI):
             api_version="2024-12-01-preview",
             **kwargs  
         )
-        
+
 class Gemini(ChatGoogleGenerativeAI):
     def __init__(self, **kwargs):
         super().__init__(
-            model="gemini-2.5-pro-preview-05-06",
+            model="gemini-2.5-pro",
             **kwargs
         )
+
+class Gemini_2_5_Flash(ChatGoogleGenerativeAI):
+    def __init__(self, **kwargs):
+        super().__init__(
+            model="gemini-2.5-flash",
+            **kwargs
+        )
+
     
-class Claude_3_7_Sonnet(ChatBedrockConverse):
+class Claude_3_7_Sonnet(ChatBedrock):
     def __init__(self, **kwargs):
         super().__init__(
                 model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
                 aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
                 aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
                 region_name=os.getenv("AWS_REGION_NAME"),
-                **kwargs
+                max_tokens=200000,
+            **kwargs
         )
+        
+if __name__ == "__main__":
+    llm = Claude_3_7_Sonnet()
+    print(llm.invoke("Hello, how are you?"))

@@ -28,6 +28,8 @@
 
         .chat-panel {
             flex: 1;
+            min-width: 400px;
+            max-width: 600px;
             background: white;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
@@ -37,7 +39,8 @@
         }
 
         .slides-panel {
-            flex: 2;
+            flex: 1.5;
+            min-width: 700px;
             background: white;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
@@ -54,6 +57,35 @@
             font-size: 18px;
             font-weight: bold;
             border-bottom: 2px solid #333333;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .present-slides-btn {
+            position: absolute;
+            right: 20px;
+            background: #000000;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .present-slides-btn:hover {
+            background: #333333;
+            transform: scale(1.05);
+        }
+
+        .present-slides-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .chat-messages {
@@ -142,6 +174,7 @@
         }
 
         .chat-input button:hover {
+            background: #333333;
             transform: scale(1.05);
         }
 
@@ -227,7 +260,7 @@
 
         .slide-content iframe {
             width: 100%;
-            height: 400px;
+            height: 500px;
             border: none;
             border-radius: 8px;
             transform-origin: 0 0;
@@ -237,7 +270,7 @@
         .iframe-container {
             position: relative;
             width: 100%;
-            height: 400px;
+            height: 500px;
             overflow: hidden;
             border-radius: 8px;
             background: #ffffff;
@@ -315,14 +348,19 @@
             border-radius: 12px;
             font-size: 10px;
             font-weight: bold;
-            opacity: 0;
+            opacity: 1;
             transition: opacity 0.3s ease;
             z-index: 11;
             pointer-events: none;
         }
 
-        .slide-edit-mode:hover .slide-edit-indicator {
-            opacity: 1;
+        .slide-edit-btn {
+            transition: all 0.3s ease;
+        }
+
+        .slide-edit-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
         }
 
         .text-editor-modal {
@@ -342,9 +380,9 @@
             background: white;
             border-radius: 12px;
             padding: 20px;
-            max-width: 500px;
-            min-width: 400px;
-            max-height: 400px;
+            max-width: 700px;
+            min-width: 600px;
+            max-height: 600px;
             overflow-y: auto;
             position: relative;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
@@ -365,21 +403,104 @@
             color: #333;
         }
 
-        .text-editor-textarea {
-            width: 100%;
-            min-height: 120px;
-            padding: 12px;
+        .text-editor-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px;
+            background: #f8f9fa;
             border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 14px;
-            resize: vertical;
-            outline: none;
-            line-height: 1.4;
+            border-bottom: 1px solid #e0e0e0;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 0;
         }
 
-        .text-editor-textarea:focus {
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border-right: 1px solid #dee2e6;
+        }
+
+        .toolbar-group:last-child {
+            border-right: none;
+        }
+
+        .toolbar-group button {
+            padding: 6px 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            min-width: 32px;
+            height: 32px;
+        }
+
+        .toolbar-group button:hover {
+            background: #e9ecef;
             border-color: #007bff;
+        }
+
+        .toolbar-group button:active,
+        .toolbar-group button.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .toolbar-group select {
+            padding: 4px 8px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background: white;
+            font-size: 12px;
+            height: 32px;
+        }
+
+        .toolbar-group input[type="color"] {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        .toolbar-group label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+            margin-right: 4px;
+        }
+
+        .text-editor-area {
+            width: 100%;
+            min-height: 200px;
+            max-height: 300px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+            outline: none;
+            line-height: 1.6;
+            overflow-y: auto;
+            background: white;
+        }
+
+        .text-editor-area:focus {
+            border-color: #007bff;
+        }
+
+        .text-editor-area:empty:before {
+            content: attr(placeholder);
+            color: #6c757d;
+            font-style: italic;
         }
 
         .text-editor-buttons {
@@ -399,12 +520,12 @@
         }
 
         .btn-save {
-            background: #28a745;
+            background: #000000;
             color: white;
         }
 
         .btn-save:hover {
-            background: #218838;
+            background: #333333;
         }
 
         .btn-cancel, .btn-close {
@@ -433,6 +554,366 @@
             opacity: 0.7;
             pointer-events: none;
         }
+
+        /* Streaming message styles */
+        .message.streaming {
+            border-left: 3px solid #007bff;
+            background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+            position: relative;
+        }
+
+        .streaming-content {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.6;
+            max-width: 100%;
+        }
+
+        .streaming-content h1, 
+        .streaming-content h2, 
+        .streaming-content h3 {
+            margin-top: 20px;
+            margin-bottom: 10px;
+            line-height: 1.3;
+        }
+
+        .streaming-content h1 {
+            font-size: 24px;
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+
+        .streaming-content h2 {
+            font-size: 20px;
+            color: #007bff;
+        }
+
+        .streaming-content h3 {
+            font-size: 18px;
+            color: #007bff;
+        }
+
+        .streaming-content strong {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .streaming-content em {
+            font-style: italic;
+            color: #555;
+        }
+
+        .streaming-content code {
+            background: #f1f3f4;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #d63384;
+        }
+
+        .streaming-content hr {
+            border: none;
+            border-top: 2px solid #e0e0e0;
+            margin: 20px 0;
+        }
+
+        .typing-cursor {
+            color: #007bff;
+            font-weight: bold;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .agent-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            color: #007bff;
+            font-weight: bold;
+        }
+
+        .tool-usage {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 4px solid #007bff;
+            margin: 8px 0;
+            animation: slideInTool 0.3s ease-out;
+        }
+
+        @keyframes slideInTool {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* AI Assistant Modal Styles */
+        .ai-assistant-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .ai-assistant-content {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 600px;
+            min-width: 500px;
+            max-height: 500px;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .ai-assistant-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .ai-assistant-header h3 {
+            margin: 0;
+            font-size: 18px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-request-area {
+            width: 100%;
+            min-height: 120px;
+            max-height: 200px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+            outline: none;
+            line-height: 1.6;
+            resize: vertical;
+            background: white;
+        }
+
+        .ai-request-area:focus {
+            border-color: #007bff;
+        }
+
+        .ai-request-area::placeholder {
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .ai-assistant-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        .btn-ask-ai {
+            background: #000000;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-ask-ai:hover {
+            background: #333333;
+        }
+
+        .btn-ask-ai:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .slide-header-buttons {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .slide-assistant-btn {
+            background: #000000;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .slide-assistant-btn:hover {
+            background: #333333;
+            transform: scale(1.05);
+        }
+
+        .ai-processing {
+            text-align: center;
+            padding: 20px;
+            color: #007bff;
+        }
+
+        .ai-processing .loading {
+            margin-right: 10px;
+        }
+
+        /* Outline Approval Styles */
+        .outline-approval-message {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border: 2px solid #2196f3;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+        }
+
+        .approval-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #1976d2;
+            font-size: 16px;
+        }
+
+        .approval-content {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .approval-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        .approval-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .approve-btn {
+            background: #4caf50;
+            color: white;
+        }
+
+        .approve-btn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+
+        .reject-btn {
+            background: #f44336;
+            color: white;
+        }
+
+        .reject-btn:hover {
+            background: #da190b;
+            transform: scale(1.05);
+        }
+
+        .approval-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .approval-processing {
+            text-align: center;
+            padding: 10px;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Responsive adjustments for layout */
+        @media (max-width: 1400px) {
+            .chat-panel {
+                flex: 1;
+                min-width: 350px;
+                max-width: 500px;
+            }
+            
+            .slides-panel {
+                flex: 1.2;
+                min-width: 600px;
+            }
+        }
+
+        @media (max-width: 1000px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .chat-panel {
+                flex: 0 0 250px;
+                min-width: auto;
+                max-width: none;
+            }
+            
+            .slides-panel {
+                flex: 1;
+                min-width: auto;
+            }
+            
+            .iframe-container {
+                height: 350px;
+            }
+            
+            .slide-content iframe {
+                height: 350px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -456,7 +937,10 @@
         <!-- Slides Panel -->
         <div class="slides-panel">
             <div class="panel-header">
-                <span>🎯 Generated Slides (Hover over text to edit)</span>
+                <span>🎯 Generated Slides (Click Edit button to enable text editing)</span>
+                <button id="presentSlidesBtn" class="present-slides-btn" onclick="openPresentationMode()" title="Open slides in presentation mode">
+                    📊 Present
+                </button>
             </div>
             <div class="slide-counter" id="slideCounter" style="display: none;">
                 Slides Generated: <span id="slideCount">0</span>
@@ -477,10 +961,99 @@
                 <h3>Edit Text</h3>
                 <button class="btn-close" onclick="closeTextEditor()">×</button>
             </div>
-            <textarea class="text-editor-textarea" id="textEditorTextarea" placeholder="Edit the text content..."></textarea>
+            
+            <!-- Rich Text Toolbar -->
+            <div class="text-editor-toolbar">
+                <!-- Font & Size -->
+                <div class="toolbar-group">
+                    <select id="fontFamily" onchange="formatText('fontName', this.value)">
+                        <option value="Arial">Arial</option>
+                        <option value="Helvetica">Helvetica</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Courier New">Courier New</option>
+                    </select>
+                    <select id="fontSize" onchange="formatText('fontSize', this.value)">
+                        <option value="1">8pt</option>
+                        <option value="2">10pt</option>
+                        <option value="3" selected>12pt</option>
+                        <option value="4">14pt</option>
+                        <option value="5">18pt</option>
+                        <option value="6">24pt</option>
+                        <option value="7">36pt</option>
+                    </select>
+                    <button type="button" onclick="increaseFontSize()" title="Increase Font Size">A+</button>
+                    <button type="button" onclick="decreaseFontSize()" title="Decrease Font Size">A-</button>
+                </div>
+
+                <!-- Text Formatting -->
+                <div class="toolbar-group">
+                    <button type="button" onclick="formatText('bold')" title="Bold"><b>B</b></button>
+                    <button type="button" onclick="formatText('italic')" title="Italic"><i>I</i></button>
+                    <button type="button" onclick="formatText('underline')" title="Underline"><u>U</u></button>
+                    <button type="button" onclick="formatText('strikeThrough')" title="Strikethrough"><s>S</s></button>
+                </div>
+
+                <!-- Alignment -->
+                <div class="toolbar-group">
+                    <button type="button" onclick="formatText('justifyLeft')" title="Align Left">⬅️</button>
+                    <button type="button" onclick="formatText('justifyCenter')" title="Center">⬛</button>
+                    <button type="button" onclick="formatText('justifyRight')" title="Align Right">➡️</button>
+                    <button type="button" onclick="formatText('justifyFull')" title="Justify">⬛⬛</button>
+                </div>
+
+                <!-- Lists -->
+                <div class="toolbar-group">
+                    <button type="button" onclick="formatText('insertUnorderedList')" title="Bullet List">• List</button>
+                    <button type="button" onclick="formatText('insertOrderedList')" title="Numbered List">1. List</button>
+                </div>
+
+                <!-- Colors -->
+                <div class="toolbar-group">
+                    <label for="textColor" title="Text Color">A</label>
+                    <input type="color" id="textColor" onchange="formatText('foreColor', this.value)" value="#000000">
+                    <label for="bgColor" title="Background Color">🎨</label>
+                    <input type="color" id="bgColor" onchange="formatText('backColor', this.value)" value="#ffffff">
+                </div>
+
+                <!-- Utilities -->
+                <div class="toolbar-group">
+                    <button type="button" onclick="formatText('removeFormat')" title="Clear Formatting">Clear</button>
+                    <button type="button" onclick="formatText('undo')" title="Undo">↶</button>
+                    <button type="button" onclick="formatText('redo')" title="Redo">↷</button>
+                </div>
+            </div>
+
+            <!-- Rich Text Editor -->
+            <div class="text-editor-area" id="textEditorArea" contenteditable="true" placeholder="Edit the text content..."></div>
+            
             <div class="text-editor-buttons">
                 <button class="btn-cancel" onclick="closeTextEditor()">Cancel</button>
                 <button class="btn-save" onclick="saveTextEdit()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Assistant Modal -->
+    <div class="ai-assistant-modal" id="aiAssistantModal">
+        <div class="ai-assistant-content">
+            <div class="ai-assistant-header">
+                <h3>Ask Assistant</h3>
+                <button class="btn-close" onclick="closeAiAssistant()">×</button>
+            </div>
+            
+            <textarea id="aiRequestArea" class="ai-request-area" placeholder="Tell the AI assistant how you'd like to modify this slide...
+
+Examples:
+• Make the background blue and add more visual elements
+• Change the content to focus on benefits instead of features  
+• Add bullet points and make the text larger
+• Create a more modern design with gradients
+• Add an image placeholder and reorganize the layout"></textarea>
+            
+            <div class="ai-assistant-buttons">
+                <button class="btn-ask-ai" onclick="askAssistant()">🤖 Ask AI (Ctrl+Enter)</button>
             </div>
         </div>
     </div>
@@ -495,6 +1068,7 @@
         let currentEditingElement = null;
         let originalTextContent = null;
         let currentStreamingElements = {}; // Track streaming message elements
+        let textEditorArea = null; // Rich text editor reference
 
         // DOM elements
         const chatMessages = document.getElementById('chatMessages');
@@ -505,7 +1079,8 @@
         const slideCounter = document.getElementById('slideCounter');
         const slideCountSpan = document.getElementById('slideCount');
         const textEditorModal = document.getElementById('textEditorModal');
-        const textEditorTextarea = document.getElementById('textEditorTextarea');
+        const aiAssistantModal = document.getElementById('aiAssistantModal');
+        textEditorArea = document.getElementById('textEditorArea');
 
         // Socket event handlers
         socket.on('connect', () => {
@@ -519,7 +1094,12 @@
         });
 
         socket.on('chat_message', (data) => {
-            addChatMessage(data.type, data.message, data.timestamp);
+            // Check if this is a supervisor message by looking for the name
+            let messageType = data.type;
+            if (data.type === 'assistant' && data.message.includes('📋 I\'ve generated an outline')) {
+                messageType = 'supervisor';
+            }
+            addChatMessage(messageType, data.message, data.timestamp);
         });
 
         socket.on('agent_status', (data) => {
@@ -531,6 +1111,7 @@
             addSlide(data);
             slideCount++;
             updateSlideCounter();
+            updatePresentButton();
         });
 
         socket.on('slide_updated', (data) => {
@@ -539,6 +1120,7 @@
         });
 
         socket.on('text_updated', (data) => {
+            console.log('Received text_updated event:', data);
             updateSlideContent(data);
             addChatMessage('system', `Text updated in slide ${data.slide_number} successfully!`);
             
@@ -567,7 +1149,7 @@
         });
 
         socket.on('agent_tool_call', (data) => {
-            addToolCallMessage(data.agent, data.tool);
+            addToolCallMessage(data.agent, data.tool, data.content);
         });
 
         socket.on('workflow_complete', (data) => {
@@ -576,20 +1158,81 @@
             updateUI();
         });
 
+        socket.on('ai_slide_edited', (data) => {
+            console.log('Received ai_slide_edited event:', data);
+            updateSlideContent(data);
+            
+            // Extract AI model used from HTML comment
+            let aiModelUsed = 'AI Assistant';
+            if (data.content && data.content.includes('<!-- Generated by')) {
+                const modelMatch = data.content.match(/<!--\s*Generated\s+by\s+([^-]+)\s*-->/);
+                if (modelMatch) {
+                    aiModelUsed = modelMatch[1].trim();
+                }
+            } else if (data.content && data.content.includes('<!-- Content by')) {
+                const modelMatch = data.content.match(/<!--\s*Content\s+by\s+([^,]+),/);
+                if (modelMatch) {
+                    aiModelUsed = modelMatch[1].trim();
+                }
+            }
+            
+            addChatMessage('system', '🤖 ' + aiModelUsed + ' successfully edited slide ' + data.slide_number + '!');
+            updateStatus('AI edit completed using ' + aiModelUsed + '!');
+            
+            // Remove processing indicator and close modal
+            const slideDiv = document.querySelector(`[data-slide-number="${data.slide_number}"]`);
+            if (slideDiv) {
+                slideDiv.classList.remove('slide-saving');
+                const processingIndicator = slideDiv.querySelector('.editing-indicator');
+                if (processingIndicator) {
+                    processingIndicator.remove();
+                }
+            }
+            
+            closeAiAssistant();
+        });
+
         socket.on('error', (data) => {
             addChatMessage('system', `Error: ${data.message}`);
             updateStatus('Error occurred. Please try again.');
             isGenerating = false;
             updateUI();
+            
+            // Reset AI assistant state if there was an error
+            if (currentAiSlideNumber !== null) {
+                const slideDiv = document.querySelector(`[data-slide-number="${currentAiSlideNumber}"]`);
+                if (slideDiv) {
+                    slideDiv.classList.remove('slide-saving');
+                    const processingIndicator = slideDiv.querySelector('.editing-indicator');
+                    if (processingIndicator) {
+                        processingIndicator.remove();
+                    }
+                }
+                closeAiAssistant();
+            }
         });
 
         // UI Functions
         function addChatMessage(type, message, timestamp) {
+            // Check if this is an outline approval request
+            if (type === 'supervisor' && message.includes('approve') && message.includes('reject')) {
+                addOutlineApprovalMessage(message, timestamp);
+                return;
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
             
             const messageContent = document.createElement('div');
-            messageContent.textContent = message;
+            
+            // Check if it's an assistant message with markdown content
+            if (type === 'assistant' && isMarkdownContent(message)) {
+                messageContent.innerHTML = renderMarkdown(message);
+                messageContent.className = 'streaming-content'; // Apply markdown styling
+            } else {
+                messageContent.textContent = message;
+            }
+            
             messageDiv.appendChild(messageContent);
             
             if (timestamp) {
@@ -603,6 +1246,91 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
+        function addOutlineApprovalMessage(message, timestamp) {
+            // Find the most recent outline content from outline_agent messages
+            let outlineContent = "No outline content found.";
+            const messages = chatMessages.querySelectorAll('.message');
+            
+            // Look for the most recent outline_agent streaming content
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const msg = messages[i];
+                if (msg.classList.contains('assistant') && 
+                    (msg.textContent.includes('Slide 1:') || msg.textContent.includes('outline'))) {
+                    const contentDiv = msg.querySelector('.streaming-content') || msg.querySelector('div');
+                    if (contentDiv && contentDiv.textContent.trim()) {
+                        outlineContent = contentDiv.textContent.trim();
+                        break;
+                    }
+                }
+            }
+            
+            // Create approval interface
+            const approvalDiv = document.createElement('div');
+            approvalDiv.className = 'outline-approval-message';
+            approvalDiv.id = 'outline-approval-interface';
+            
+            approvalDiv.innerHTML = `
+                <div class="approval-header">
+                    📋 Outline Review Required
+                </div>
+                <div class="approval-content">
+                    ${outlineContent.replace(/\n/g, '<br>')}
+                </div>
+                <div class="approval-buttons">
+                    <button class="approval-btn approve-btn" onclick="approveOutline()">
+                        ✅ Approve & Continue
+                    </button>
+                    <button class="approval-btn reject-btn" onclick="rejectOutline()">
+                        ❌ Reject & Regenerate
+                    </button>
+                </div>
+            `;
+            
+            if (timestamp) {
+                const timestampDiv = document.createElement('div');
+                timestampDiv.className = 'timestamp';
+                timestampDiv.textContent = new Date(timestamp).toLocaleTimeString();
+                approvalDiv.appendChild(timestampDiv);
+            }
+            
+            chatMessages.appendChild(approvalDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function approveOutline() {
+            // Disable buttons and show processing
+            const approvalInterface = document.getElementById('outline-approval-interface');
+            if (approvalInterface) {
+                const buttons = approvalInterface.querySelectorAll('.approval-btn');
+                buttons.forEach(btn => btn.disabled = true);
+                
+                const buttonsContainer = approvalInterface.querySelector('.approval-buttons');
+                buttonsContainer.innerHTML = '<div class="approval-processing">Processing approval...</div>';
+            }
+            
+            // Send approval message through the normal message system to continue workflow
+            socket.emit('send_message', { message: 'approve' });
+            
+            updateStatus('Outline approved. Proceeding to layout design...');
+        }
+
+        function rejectOutline() {
+            // Disable buttons and show processing
+            const approvalInterface = document.getElementById('outline-approval-interface');
+            if (approvalInterface) {
+                const buttons = approvalInterface.querySelectorAll('.approval-btn');
+                buttons.forEach(btn => btn.disabled = true);
+                
+                const buttonsContainer = approvalInterface.querySelector('.approval-buttons');
+                buttonsContainer.innerHTML = '<div class="approval-processing">Regenerating outline...</div>';
+            }
+            
+            // Send rejection message through the normal message system to continue workflow
+            socket.emit('send_message', { message: 'reject' });
+            
+            updateStatus('Outline rejected. Regenerating...');
+        }
+
         function addAgentStatusMessage(data) {
             const statusDiv = document.createElement('div');
             statusDiv.className = `agent-status ${data.agent}`;
@@ -611,22 +1339,256 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
+        // Streaming message functions
+        function startAgentStreaming(agent) {
+            console.log(`Starting streaming for agent: ${agent}`);
+            
+            // Create a new streaming message element
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant streaming';
+            messageDiv.id = `stream-${agent}`;
+            
+            const agentLabel = document.createElement('div');
+            agentLabel.className = 'agent-label';
+            agentLabel.textContent = `${agent.replace('_', ' ').toUpperCase()}:`;
+            agentLabel.style.fontWeight = 'bold';
+            agentLabel.style.marginBottom = '5px';
+            agentLabel.style.color = '#007bff';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'streaming-content';
+            contentDiv.id = `stream-content-${agent}`;
+            
+            const cursor = document.createElement('span');
+            cursor.className = 'typing-cursor';
+            cursor.textContent = '|';
+            cursor.style.animation = 'blink 1s infinite';
+            contentDiv.appendChild(cursor);
+            
+            messageDiv.appendChild(agentLabel);
+            messageDiv.appendChild(contentDiv);
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Store reference for updates
+            currentStreamingElements[agent] = {
+                messageDiv: messageDiv,
+                contentDiv: contentDiv,
+                cursor: cursor
+            };
+            
+            updateStatus(`${agent.replace('_', ' ').toUpperCase()} is thinking...`);
+        }
+
+        function updateAgentStreaming(agent, token, accumulated) {
+            const streamingElement = currentStreamingElements[agent];
+            if (streamingElement) {
+                // Remove cursor temporarily
+                if (streamingElement.cursor.parentNode) {
+                    streamingElement.cursor.parentNode.removeChild(streamingElement.cursor);
+                }
+                
+                // Check if content looks like markdown
+                if (isMarkdownContent(accumulated)) {
+                    // Render as HTML with markdown formatting
+                    streamingElement.contentDiv.innerHTML = renderMarkdown(accumulated);
+                } else {
+                    // Update content as plain text
+                    streamingElement.contentDiv.textContent = accumulated;
+                }
+                
+                // Re-add cursor
+                streamingElement.contentDiv.appendChild(streamingElement.cursor);
+                
+                // Auto-scroll
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function endAgentStreaming(agent, finalContent) {
+            const streamingElement = currentStreamingElements[agent];
+            if (streamingElement) {
+                // Remove cursor
+                if (streamingElement.cursor.parentNode) {
+                    streamingElement.cursor.parentNode.removeChild(streamingElement.cursor);
+                }
+                
+                // Set final content with markdown rendering if applicable
+                if (isMarkdownContent(finalContent)) {
+                    streamingElement.contentDiv.innerHTML = renderMarkdown(finalContent);
+                } else {
+                    streamingElement.contentDiv.textContent = finalContent;
+                }
+                
+                // Add timestamp
+                const timestampDiv = document.createElement('div');
+                timestampDiv.className = 'timestamp';
+                timestampDiv.textContent = new Date().toLocaleTimeString();
+                streamingElement.messageDiv.appendChild(timestampDiv);
+                
+                // Remove streaming class
+                streamingElement.messageDiv.classList.remove('streaming');
+                
+                // Clean up reference
+                delete currentStreamingElements[agent];
+                
+                // Auto-scroll
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            console.log(`Finished streaming for agent: ${agent}`);
+        }
+
+        function addToolCallMessage(agent, tool, content) {
+            const toolDiv = document.createElement('div');
+            toolDiv.className = 'message system tool-usage';
+            
+            const toolHeader = document.createElement('div');
+            toolHeader.style.fontWeight = 'bold';
+            toolHeader.style.marginBottom = '5px';
+            toolHeader.innerHTML = `🔧 ${agent.replace('_', ' ').toUpperCase()} using <span style="color: #007bff;">${tool}</span> tool`;
+            
+            const toolContent = document.createElement('div');
+            toolContent.style.fontSize = '11px';
+            toolContent.style.opacity = '0.8';
+            toolContent.style.marginLeft = '20px';
+            toolContent.style.fontFamily = 'monospace';
+            toolContent.style.background = '#f8f9fa';
+            toolContent.style.padding = '5px 8px';
+            toolContent.style.borderRadius = '4px';
+            toolContent.style.marginTop = '5px';
+            toolContent.style.borderLeft = '3px solid #007bff';
+            
+            // Truncate content if too long
+            const displayContent = content && content.length > 150 ? content.substring(0, 150) + '...' : content;
+            toolContent.textContent = displayContent || 'Processing...';
+            
+            toolDiv.appendChild(toolHeader);
+            if (content) {
+                toolDiv.appendChild(toolContent);
+            }
+            
+            // Add timestamp
+            const timestampDiv = document.createElement('div');
+            timestampDiv.className = 'timestamp';
+            timestampDiv.textContent = new Date().toLocaleTimeString();
+            toolDiv.appendChild(timestampDiv);
+            
+            chatMessages.appendChild(toolDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Markdown detection and rendering functions
+        function isMarkdownContent(text) {
+            if (!text || typeof text !== 'string') return false;
+            
+            // Check for common markdown patterns
+            const markdownPatterns = [
+                /#{1,6}\s+/,           // Headers
+                /\*{1,2}[^*]+\*{1,2}/, // Bold/italic
+                /^\s*[-*+]\s+/m,       // Lists
+                /^\s*\d+\.\s+/m,       // Numbered lists
+                /---+/,                // Horizontal rules
+                /\[.+\]\(.+\)/,        // Links
+                /`[^`]+`/,             // Inline code
+                /```[\s\S]*```/        // Code blocks
+            ];
+            
+            return markdownPatterns.some(pattern => pattern.test(text));
+        }
+
+        function renderMarkdown(text) {
+            if (!text) return '';
+            
+            let html = text;
+            
+            // Convert headers
+            html = html.replace(/^### (.*$)/gm, '<h3 style="color: #007bff; margin: 15px 0 10px 0; font-size: 18px; font-weight: bold;">$1</h3>');
+            html = html.replace(/^## (.*$)/gm, '<h2 style="color: #007bff; margin: 20px 0 15px 0; font-size: 20px; font-weight: bold;">$1</h2>');
+            html = html.replace(/^# (.*$)/gm, '<h1 style="color: #007bff; margin: 25px 0 20px 0; font-size: 24px; font-weight: bold;">$1</h1>');
+            
+            // Convert bold text
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: bold; color: #333;">$1</strong>');
+            
+            // Convert italic text
+            html = html.replace(/\*(.*?)\*/g, '<em style="font-style: italic;">$1</em>');
+            
+            // Convert inline code
+            html = html.replace(/`([^`]+)`/g, '<code style="background: #f1f3f4; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>');
+            
+            // Convert horizontal rules
+            html = html.replace(/^---+$/gm, '<hr style="border: none; border-top: 2px solid #e0e0e0; margin: 20px 0;">');
+            
+            // Convert numbered lists
+            html = html.replace(/^\s*(\d+)\.\s+(.*)$/gm, function(match, num, text) {
+                return `<div style="margin: 5px 0; padding-left: 20px;"><span style="font-weight: bold; color: #007bff;">${num}.</span> ${text}</div>`;
+            });
+            
+            // Convert bullet lists
+            html = html.replace(/^\s*[-*+]\s+(.*)$/gm, '<div style="margin: 5px 0; padding-left: 20px;"><span style="color: #007bff;">•</span> $1</div>');
+            
+            // Convert line breaks
+            html = html.replace(/\n/g, '<br>');
+            
+            // Clean up extra breaks around headers
+            html = html.replace(/<br><h([1-6])/g, '<h$1');
+            html = html.replace(/<\/h([1-6])><br>/g, '</h$1>');
+            
+            return html;
+        }
+
         function addSlide(slideData) {
             const slideDiv = document.createElement('div');
-            slideDiv.className = slideData.error ? 'slide error slide-edit-mode' : 'slide slide-edit-mode';
+            slideDiv.className = slideData.error ? 'slide error' : 'slide';
             slideDiv.setAttribute('data-slide-number', slideData.slide_number);
             
             const slideHeader = document.createElement('div');
             slideHeader.className = 'slide-header';
-            slideHeader.textContent = `Slide ${slideData.slide_number}`;
+            slideHeader.style.display = 'flex';
+            slideHeader.style.justifyContent = 'space-between';
+            slideHeader.style.alignItems = 'center';
+            
+            const slideTitle = document.createElement('span');
+            slideTitle.textContent = `Slide ${slideData.slide_number}`;
+            
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.className = 'slide-header-buttons';
+            
+            const assistantButton = document.createElement('button');
+            assistantButton.className = 'slide-assistant-btn';
+            assistantButton.innerHTML = '🤖 Ask Assistant';
+            assistantButton.setAttribute('data-slide-number', slideData.slide_number);
+            assistantButton.addEventListener('click', () => openAiAssistant(slideData.slide_number));
+            
+            const editButton = document.createElement('button');
+            editButton.className = 'slide-edit-btn';
+            editButton.textContent = 'Edit';
+            editButton.style.background = '#007bff';
+            editButton.style.color = 'white';
+            editButton.style.border = 'none';
+            editButton.style.borderRadius = '6px';
+            editButton.style.padding = '6px 12px';
+            editButton.style.fontSize = '12px';
+            editButton.style.cursor = 'pointer';
+            editButton.style.transition = 'all 0.3s ease';
+            editButton.setAttribute('data-slide-number', slideData.slide_number);
+            
+            editButton.addEventListener('click', () => toggleEditMode(slideData.slide_number));
+            
+            buttonsContainer.appendChild(assistantButton);
+            buttonsContainer.appendChild(editButton);
+            
+            slideHeader.appendChild(slideTitle);
+            slideHeader.appendChild(buttonsContainer);
             
             const slideContent = document.createElement('div');
             slideContent.className = 'slide-content';
             
-            // Add edit indicator
+            // Add edit indicator (initially hidden)
             const editIndicator = document.createElement('div');
             editIndicator.className = 'slide-edit-indicator';
-            editIndicator.textContent = '✏️ Hover over text to edit';
+            editIndicator.style.display = 'none';
             
             // Check if content is HTML (from generate_slide tool)
             if (slideData.content.includes('<html>') || slideData.content.includes('<!DOCTYPE')) {
@@ -689,8 +1651,8 @@
                         iframe.style.transition = 'opacity 0.3s ease';
                         loadingDiv.style.display = 'none';
                         
-                        // Inject inline editing functionality into iframe
-                        injectInlineEditingToIframe(iframe, slideData.slide_number);
+                        // Initialize iframe without editing enabled
+                        injectInlineEditingToIframe(iframe, slideData.slide_number, false);
                         
                         console.log(`Scaled slide ${slideData.slide_number} by ${scale.toFixed(3)} (${scaledWidth}x${scaledHeight} in ${containerWidth}x${containerHeight})`);
                     }, 100);
@@ -710,28 +1672,91 @@
         }
 
         function updateSlideContent(slideData) {
+            console.log(`Updating slide ${slideData.slide_number} content`);
             const slideDiv = document.querySelector(`[data-slide-number="${slideData.slide_number}"]`);
             if (slideDiv) {
                 const iframe = slideDiv.querySelector('iframe');
                 if (iframe) {
+                    console.log(`Found iframe for slide ${slideData.slide_number}, updating srcdoc`);
                     iframe.srcdoc = slideData.content;
-                    // Re-inject editing functionality after content update
+                    
+                    // Force iframe reload
                     iframe.onload = () => {
+                        console.log(`Iframe loaded for slide ${slideData.slide_number}`);
                         setTimeout(() => {
-                            injectInlineEditingToIframe(iframe, slideData.slide_number);
+                            const isEditMode = slideDiv.classList.contains('slide-edit-mode');
+                            console.log(`Re-injecting editing with mode: ${isEditMode}`);
+                            injectInlineEditingToIframe(iframe, slideData.slide_number, isEditMode);
                         }, 100);
                     };
+                    
                     console.log(`Updated slide ${slideData.slide_number} content`);
+                } else {
+                    console.warn(`No iframe found for slide ${slideData.slide_number}`);
+                }
+            } else {
+                console.warn(`No slide div found for slide number ${slideData.slide_number}`);
+            }
+        }
+
+        function toggleEditMode(slideNumber) {
+            const slideDiv = document.querySelector(`[data-slide-number="${slideNumber}"]`);
+            const editButton = slideDiv.querySelector('.slide-edit-btn');
+            const editIndicator = slideDiv.querySelector('.slide-edit-indicator');
+            const iframe = slideDiv.querySelector('iframe');
+            
+            if (slideDiv.classList.contains('slide-edit-mode')) {
+                // Turn off edit mode
+                slideDiv.classList.remove('slide-edit-mode');
+                editButton.textContent = 'Edit';
+                editButton.style.background = '#007bff';
+                editIndicator.style.display = 'none';
+                
+                // Disable editing in iframe
+                if (iframe) {
+                    injectInlineEditingToIframe(iframe, slideNumber, false);
+                }
+            } else {
+                // Turn on edit mode
+                slideDiv.classList.add('slide-edit-mode');
+                editButton.textContent = 'Done';
+                editButton.style.background = '#28a745';
+                editIndicator.style.display = 'block';
+                
+                // Enable editing in iframe
+                if (iframe) {
+                    injectInlineEditingToIframe(iframe, slideNumber, true);
                 }
             }
         }
 
-        function injectInlineEditingToIframe(iframe, slideNumber) {
+        function injectInlineEditingToIframe(iframe, slideNumber, enableEdit = false) {
             try {
                 const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                 
+                // Remove existing editing styles and elements
+                const existingStyle = iframeDoc.getElementById('editing-style');
+                if (existingStyle) {
+                    existingStyle.remove();
+                }
+                
+                const existingEditButtons = iframeDoc.querySelectorAll('.edit-button-inline');
+                existingEditButtons.forEach(btn => btn.remove());
+                
+                const existingEditableElements = iframeDoc.querySelectorAll('.editable-text');
+                existingEditableElements.forEach(el => {
+                    el.classList.remove('editable-text');
+                    el.style.position = '';
+                });
+                
+                if (!enableEdit) {
+                    console.log(`Disabled editing for slide ${slideNumber}`);
+                    return;
+                }
+                
                 // Add CSS for inline editing
                 const style = iframeDoc.createElement('style');
+                style.id = 'editing-style';
                 style.textContent = `
                     .editable-text {
                         position: relative;
@@ -823,18 +1848,30 @@
             currentEditingElement = textId;
             originalTextContent = originalText;
             
-            // Set the text content in the editor
-            textEditorTextarea.value = originalText;
+            // Set the content in the rich text editor
+            textEditorArea.innerHTML = originalText;
             
             // Update modal title
             const modalTitle = document.querySelector('.text-editor-header h3');
             modalTitle.textContent = `Edit ${elementType.toUpperCase()} Text`;
             
             textEditorModal.style.display = 'flex';
-            textEditorTextarea.focus();
-            textEditorTextarea.select();
+            textEditorArea.focus();
             
-            console.log(`Opening editor for slide ${slideNumber}, element ${textId}: "${originalText}"`);
+            // Select all content for easy editing
+            if (textEditorArea.textContent) {
+                const range = document.createRange();
+                range.selectNodeContents(textEditorArea);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+            
+            // Set up event listeners for toolbar updates
+            textEditorArea.addEventListener('keyup', updateToolbarStates);
+            textEditorArea.addEventListener('mouseup', updateToolbarStates);
+            
+            console.log(`Opening rich text editor for slide ${slideNumber}, element ${textId}: "${originalText}"`);
         }
 
         function closeTextEditor() {
@@ -842,13 +1879,116 @@
             currentEditingSlide = null;
             currentEditingElement = null;
             originalTextContent = null;
-            textEditorTextarea.value = '';
+            textEditorArea.innerHTML = '';
+        }
+
+        // Rich Text Editor Functions
+        function formatText(command, value = null) {
+            // Focus the editor to ensure commands work
+            textEditorArea.focus();
+            
+            // Execute the formatting command
+            document.execCommand(command, false, value);
+            
+            // Update button states
+            updateToolbarStates();
+        }
+
+        function updateToolbarStates() {
+            // Update button active states based on current selection
+            const commands = ['bold', 'italic', 'underline', 'strikeThrough'];
+            
+            commands.forEach(command => {
+                const button = document.querySelector(`[onclick*="${command}"]`);
+                if (button) {
+                    if (document.queryCommandState(command)) {
+                        button.classList.add('active');
+                    } else {
+                        button.classList.remove('active');
+                    }
+                }
+            });
+
+            // Update font family and size
+            try {
+                const fontFamily = document.queryCommandValue('fontName');
+                const fontSize = document.queryCommandValue('fontSize');
+                
+                if (fontFamily) {
+                    document.getElementById('fontFamily').value = fontFamily;
+                }
+                if (fontSize) {
+                    document.getElementById('fontSize').value = fontSize;
+                }
+            } catch (e) {
+                // Ignore errors from queryCommandValue
+            }
+        }
+
+        function insertLink() {
+            const url = prompt('Enter URL:');
+            if (url) {
+                formatText('createLink', url);
+            }
+        }
+
+        function insertImage() {
+            const url = prompt('Enter image URL:');
+            if (url) {
+                formatText('insertImage', url);
+            }
+        }
+
+        // Custom font size adjustment
+        function increaseFontSize() {
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const span = document.createElement('span');
+                
+                try {
+                    range.surroundContents(span);
+                    const currentSize = parseFloat(window.getComputedStyle(span).fontSize);
+                    span.style.fontSize = (currentSize + 2) + 'px';
+                } catch (e) {
+                    // If can't surround, just apply to selection
+                    formatText('fontSize', '5');
+                }
+            }
+        }
+
+        function decreaseFontSize() {
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const span = document.createElement('span');
+                
+                try {
+                    range.surroundContents(span);
+                    const currentSize = parseFloat(window.getComputedStyle(span).fontSize);
+                    const newSize = Math.max(8, currentSize - 2);
+                    span.style.fontSize = newSize + 'px';
+                } catch (e) {
+                    // If can't surround, just apply to selection
+                    formatText('fontSize', '2');
+                }
+            }
         }
 
         function saveTextEdit() {
             if (currentEditingSlide === null || currentEditingElement === null) return;
             
-            const newTextContent = textEditorTextarea.value.trim();
+            const newHtmlContent = textEditorArea.innerHTML.trim();
+            const newTextContent = textEditorArea.textContent.trim();
+            
+            console.log('Saving text edit:', {
+                slide: currentEditingSlide,
+                textId: currentEditingElement,
+                original: originalTextContent,
+                newHtml: newHtmlContent,
+                newText: newTextContent
+            });
+            
             if (!newTextContent) {
                 alert('Please enter some text content.');
                 return;
@@ -871,16 +2011,21 @@
                 slideDiv.appendChild(editingIndicator);
             }
             
-            // Send edit request to backend
-            socket.emit('edit_text', {
+            // Send edit request to backend with both HTML and text content
+            const editData = {
                 slide_number: currentEditingSlide,
                 text_id: currentEditingElement,
-                new_text: newTextContent,
-                original_text: originalTextContent
-            });
+                new_text: newHtmlContent, // Send HTML content
+                new_text_plain: newTextContent, // Also send plain text for fallback
+                original_text: originalTextContent,
+                is_rich_text: true // Flag to indicate this is rich text
+            };
+            
+            console.log('Sending edit_text event:', editData);
+            socket.emit('edit_text', editData);
             
             closeTextEditor();
-            addChatMessage('system', `Saving text changes to slide ${currentEditingSlide}...`);
+            addChatMessage('system', `Saving rich text changes to slide ${currentEditingSlide}...`);
         }
 
         function extractTextFromHtml(htmlContent) {
@@ -900,7 +2045,7 @@
         }
 
         function updateStatus(message) {
-            statusIndicator.innerHTML = `<span class="loading"></span>${message}`;
+            statusIndicator.innerHTML = '<span class="loading"></span>' + message;
         }
 
         function updateSlideCounter() {
@@ -948,10 +2093,24 @@
             sendButton.disabled = !messageInput.value.trim() || isGenerating;
         });
 
-        // Close modal when clicking outside
+        // Close modals when clicking outside
         textEditorModal.addEventListener('click', (e) => {
             if (e.target === textEditorModal) {
                 closeTextEditor();
+            }
+        });
+
+        aiAssistantModal.addEventListener('click', (e) => {
+            if (e.target === aiAssistantModal) {
+                closeAiAssistant();
+            }
+        });
+
+        // Add keyboard support for AI Assistant modal
+        document.getElementById('aiRequestArea').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                askAssistant();
             }
         });
 
@@ -963,8 +2122,136 @@
             }
         });
 
+        // Presentation Mode Functions
+        function openPresentationMode() {
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function updatePresentButton() {
+            const presentBtn = document.getElementById('presentSlidesBtn');
+            const slides = document.querySelectorAll('.slide');
+            
+            if (presentBtn) {
+                presentBtn.disabled = slides.length === 0;
+                // Keep the button visible but just disable it when no slides
+                presentBtn.style.display = 'block';
+                presentBtn.style.opacity = slides.length === 0 ? '0.5' : '1';
+            }
+        }
+
         // Initialize UI
         updateUI();
+        // Don't hide button on initial load - keep it visible but disabled
+        const initialPresentBtn = document.getElementById('presentSlidesBtn');
+        if (initialPresentBtn) {
+            initialPresentBtn.style.display = 'block';
+            initialPresentBtn.disabled = true;
+            initialPresentBtn.style.opacity = '0.5';
+        }
+
+        // AI Assistant Functions
+        let currentAiSlideNumber = null;
+
+        function openAiAssistant(slideNumber) {
+            currentAiSlideNumber = slideNumber;
+            
+            // Update modal title to show which slide is being edited
+            const modalTitle = document.querySelector('.ai-assistant-header h3');
+            modalTitle.innerHTML = `🤖 Ask Assistant - Slide ${slideNumber}`;
+            
+            // Clear previous input
+            document.getElementById('aiRequestArea').value = '';
+            
+            // Show modal
+            aiAssistantModal.style.display = 'flex';
+            document.getElementById('aiRequestArea').focus();
+            
+            console.log(`Opening AI Assistant for slide ${slideNumber}`);
+        }
+
+        function askAssistant() {
+            const request = document.getElementById('aiRequestArea').value.trim();
+            if (!request || currentAiSlideNumber === null) {
+                alert('Please enter a request for the assistant.');
+                return;
+            }
+            
+            // Get current slide content
+            const slideDiv = document.querySelector(`[data-slide-number="${currentAiSlideNumber}"]`);
+            const iframe = slideDiv ? slideDiv.querySelector('iframe') : null;
+            let currentSlideContent = '';
+            
+            if (iframe && iframe.srcdoc) {
+                currentSlideContent = iframe.srcdoc;
+            } else {
+                const textContent = slideDiv ? slideDiv.querySelector('.slide-content') : null;
+                if (textContent) {
+                    currentSlideContent = textContent.innerHTML;
+                }
+            }
+            
+            if (!currentSlideContent) {
+                alert('Could not find slide content to edit.');
+                return;
+            }
+            
+            // Show processing state
+            const aiRequestArea = document.getElementById('aiRequestArea');
+            const askButton = document.querySelector('.btn-ask-ai');
+            
+            askButton.disabled = true;
+            askButton.innerHTML = '<span class="loading"></span>Processing...';
+            aiRequestArea.disabled = true;
+            
+            // Add processing indicator to slide
+            if (slideDiv) {
+                slideDiv.classList.add('slide-saving');
+                
+                const existingIndicator = slideDiv.querySelector('.editing-indicator');
+                if (existingIndicator) {
+                    existingIndicator.remove();
+                }
+                
+                const processingIndicator = document.createElement('div');
+                processingIndicator.className = 'editing-indicator';
+                processingIndicator.innerHTML = '🤖 AI Processing...';
+                slideDiv.appendChild(processingIndicator);
+            }
+            
+            // Send request to backend
+            socket.emit('ai_edit_slide', {
+                slide_number: currentAiSlideNumber,
+                user_request: request,
+                current_content: currentSlideContent
+            });
+            
+            console.log('Sent AI edit request for slide', currentAiSlideNumber, 'with request:', request);
+            
+            // Add status message
+            addChatMessage('system', `🤖 AI Assistant is editing slide ${currentAiSlideNumber}: "${request}"`);
+            updateStatus(`AI Assistant processing slide ${currentAiSlideNumber}...`);
+        }
+
+        function closeAiAssistant() {
+            aiAssistantModal.style.display = 'none';
+            currentAiSlideNumber = null;
+            
+            // Reset button state
+            const askButton = document.querySelector('.btn-ask-ai');
+            const aiRequestArea = document.getElementById('aiRequestArea');
+            
+            askButton.disabled = false;
+            askButton.innerHTML = '🤖 Ask AI';
+            aiRequestArea.disabled = false;
+        }
     </script>
 </body>
-</html> 
+</html>

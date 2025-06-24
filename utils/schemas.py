@@ -16,3 +16,13 @@ class Task(BaseModel):
 
 class Plan(BaseModel):
     tasks: List[Task] = Field(description="A list of tasks to be executed.")
+    
+    
+class Slide_Content(BaseModel):
+    slide_number: int = Field(description="The number of the slide.")
+    slide_title: str = Field(description="The title of the slide.")
+    slide_body: str = Field(description="All other content of the slide.")
+    slide_script: str = Field(description="The script of the slide for user to read.")
+    
+class Outline(BaseModel):
+    outline: List[Slide_Content] = Field(description="A list of slide content to be used to generate the outline.")

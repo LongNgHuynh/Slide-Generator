@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from utils.search import Searxng
-from models.LLMs import GPT_4o, GPT_o3, Gemini, Claude_3_7_Sonnet
+from models.LLMs import GPT_4o, GPT_o3, Gemini, Claude_3_7_Sonnet, Gemini_2_5_Flash
 from pydantic import BaseModel
 import requests
 from bs4 import BeautifulSoup
@@ -22,6 +22,7 @@ LLM_4o = GPT_4o()
 LLM_o3 = GPT_o3()
 LLM_claude = Claude_3_7_Sonnet()
 LLM = Gemini()
+LLM_2_5_Flash = Gemini_2_5_Flash()
 
 # Create output directories if they don't exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -125,7 +126,7 @@ def image_search(search_query: str) -> dict:
                         "title": item.get("title", ""),
                         "content": item.get("content", ""),
                         "img_src": url,
-                        "relative_path": rel_path,
+                        # "relative_path": rel_path,
                         "resolution": item.get("resolution", "")
                     }
                     filtered_results.append(filtered_item)
@@ -270,6 +271,52 @@ def generate_slide(slide_number: int, instructions: str, images_urls: str, style
         logger.debug(f"generate_slide image_urls: {images_urls}")
         logger.debug(f"generate_slide instructions (first 150 chars): {instructions[:150]}...")
         
+        # Load existing color palette if cover slide was generated
+        color_palette = None
+        palette_path = os.path.join(GENERATED_SLIDES_DIR, "color_palette.json")
+        if os.path.exists(palette_path):
+            # Implement retry logic for file loading
+            max_retries = 3
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    # Add small delay to avoid file locking issues
+                    import time
+                    time.sleep(0.1 * retry_count)  # Progressive delay
+                    
+                    with open(palette_path, "r", encoding="utf-8") as f:
+                        color_palette = json.load(f)
+                    logger.info(f"Using existing color palette from cover slide with {len(color_palette)} colors")
+                    break  # Success, exit retry loop
+                except (FileNotFoundError, json.JSONDecodeError) as e:
+                    logger.warning(f"Attempt {retry_count + 1}: Could not load color palette: {str(e)}")
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        logger.error(f"Failed to load color palette after {max_retries} attempts, using default colors")
+                        # Use fallback color palette
+                        color_palette = {
+                            "primary": "#2563EB",
+                            "secondary": "#64748B",
+                            "accent": "#F59E0B",
+                            "background": "#F8FAFC",
+                            "text": "#1E293B"
+                        }
+                except Exception as e:
+                    logger.warning(f"Attempt {retry_count + 1}: Unexpected error loading color palette: {str(e)}")
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        logger.error(f"Failed to load color palette after {max_retries} attempts, using default colors")
+                        # Use fallback color palette
+                        color_palette = {
+                            "primary": "#2563EB", 
+                            "secondary": "#64748B",
+                            "accent": "#F59E0B",
+                            "background": "#F8FAFC",
+                            "text": "#1E293B"
+                        }
+        else:
+            logger.info("No existing color palette found, will use default color guidelines")
+        
         rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
         html_rules = ""
         try:
@@ -278,12 +325,42 @@ def generate_slide(slide_number: int, instructions: str, images_urls: str, style
         except FileNotFoundError:
             logger.warning(f"HTML rules file not found at {rules_html_path}. Using placeholder.")
             html_rules = "<!-- HTML rules not found -->"
+        
+        # Create color palette section for prompt
+        color_instructions = ""
+        if color_palette:
+            color_instructions = f"""
+MANDATORY COLOR PALETTE (MUST USE THESE EXACT COLORS TO MATCH COVER SLIDE):
+- Primary Color: {color_palette.get('primary', '#2563EB')}
+- Secondary Color: {color_palette.get('secondary', '#64748B')}
+- Accent Color: {color_palette.get('accent', '#F59E0B')}
+- Background Color: {color_palette.get('background', '#F8FAFC')}
+- Text Color: {color_palette.get('text', '#1E293B')}
+
+These colors were chosen by AI for the cover slide based on the presentation topic.
+CRITICAL: You MUST use this exact color palette to maintain visual consistency with the cover slide and overall presentation theme.
+
+Add this comment at the top of your HTML to document color usage:
+<!-- USING COVER SLIDE COLORS: PRIMARY:{color_palette.get('primary', '#2563EB')} SECONDARY:{color_palette.get('secondary', '#64748B')} ACCENT:{color_palette.get('accent', '#F59E0B')} BACKGROUND:{color_palette.get('background', '#F8FAFC')} TEXT:{color_palette.get('text', '#1E293B')} -->
+"""
+        else:
+            color_instructions = """
+COLOR GUIDELINES:
+- Use soft, professional colors that harmonize with the content
+- Ensure high contrast for readability
+- Avoid pure black (#000000) or white (#FFFFFF) backgrounds
+- Select colors appropriate to the topic (e.g., tech = blues, nature = greens, business = navy/gray)
+
+Since no cover slide exists yet, choose appropriate colors for this topic and ensure consistency if generating multiple slides.
+"""
             
         presentation_prompt = f"""
 You are a professional presentation designer specializing in Material Design principles.
 
 This is example of a slide: {html_rules}
-You should ingore all previous instructions and examples.
+You should ignore all previous instructions and examples.
+
+{color_instructions}
 
 Available Images to incorporate if relevant (use your judgment based on instructions):
 {images_urls}
@@ -304,10 +381,7 @@ Core content and detailed instructions for THIS SPECIFIC SLIDE (text, layout, et
 == DESIGN & LAYOUT GUIDELINES ==
 You must create a complete, visually rich HTML slide using Tailwind CSS. All content must be wrapped in a responsive `<div>` (or `<section>`) that splits content into multiple columns or rows as needed.
 
-DO NOT use black (#000000) or white (#FFFFFF) as background. Instead:
-- Use soft, rich, or vibrant **solid colors** that harmonize with the topic and style
-- Suggested palettes: `#fef6e4`, `#e0f2f1`, `#ede7f6`, `#e3f2fd`, `#f3e5f5`, `#fff3e0`, `#e8f5e9`
-- Ensure **high contrast** for readability (background vs text)
+{"USE THE MANDATORY COLOR PALETTE SPECIFIED ABOVE." if color_palette else "Choose appropriate colors based on content and ensure good contrast."}
 
 == SLIDE CONTAINER ==
 - Use a fixed wrapper: `width: 1280px; min-height: 720px; position: relative; overflow: hidden;`
@@ -338,6 +412,7 @@ DO NOT use black (#000000) or white (#FFFFFF) as background. Instead:
   - Never uses hero image or background image
   - Has solid-color background only
   - Looks like a high-quality, professional slide
+  - {"MAINTAINS COLOR CONSISTENCY with the cover slide theme" if color_palette else "Uses professional, topic-appropriate colors"}
 
 == OUTPUT FORMAT ==
 Only generate full HTML code for the slide:
@@ -361,7 +436,7 @@ html<!DOCTYPE html>
 """
 
         
-        response = LLM_claude.invoke(presentation_prompt) 
+        response = LLM.invoke(presentation_prompt) 
         html_content = response.content if hasattr(response, 'content') else str(response)
         
         start_marker = "<!DOCTYPE html>"
@@ -429,7 +504,7 @@ CRITICAL REQUIREMENTS:
 OUTPUT: Return only the complete updated HTML code with new content but preserved design.
 """
             
-            response = LLM_claude.invoke(update_prompt)
+            response = LLM.invoke(update_prompt)
             updated_html = response.content if hasattr(response, 'content') else str(response)
             
             # Extract HTML content
@@ -461,6 +536,185 @@ OUTPUT: Return only the complete updated HTML code with new content but preserve
     except Exception as e:
         logger.error(f"Failed to update slide #{slide_number}: {str(e)}", exc_info=True)
         return f"Failed to update slide #{slide_number}: {str(e)}"
+
+@tool
+def generate_cover_slide(title: str, subtitle: str, topic: str, author: str = "", style: str = "modern") -> dict:
+    """Generate the cover slide (first slide) of a presentation and extract its color palette.
+    This slide will establish the visual theme and color scheme for the entire presentation.
+    
+    Args:
+        title: Main title of the presentation
+        subtitle: Subtitle or description
+        topic: The main topic/theme to determine appropriate colors
+        author: Author or presenter name (optional)
+        style: Style preference for the presentation
+        
+    Returns:
+        Dictionary containing the HTML content and extracted color palette
+    """
+    try:
+        logger.info(f"generate_cover_slide tool called for topic: {topic}")
+        
+        # Load HTML rules
+        rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
+        html_rules = ""
+        try:
+            with open(rules_html_path, "r", encoding="utf-8") as f:
+                html_rules = f.read()
+        except FileNotFoundError:
+            logger.warning(f"HTML rules file not found at {rules_html_path}")
+            html_rules = "<!-- HTML rules not found -->"
+        
+        cover_slide_prompt = f"""
+You are a professional presentation designer creating the COVER SLIDE for a presentation.
+
+PRESENTATION DETAILS:
+Title: {title}
+Subtitle: {subtitle}
+Topic: {topic}
+Author: {author}
+Style: {style}
+
+COLOR PALETTE SELECTION TASK:
+You must choose an appropriate color palette that fits the topic "{topic}" and create a cohesive visual theme.
+
+COLOR SELECTION GUIDELINES:
+- Analyze the topic and choose colors that reinforce the subject matter
+- For technology topics: Consider blues, cyans, silvers, or modern tech colors
+- For historical topics: Consider earth tones, ancient colors, warm browns
+- For business topics: Consider professional blues, grays, accent golds
+- For nature topics: Consider greens, browns, earth tones
+- For medical topics: Consider clean blues, whites, soft greens
+- For creative topics: Consider vibrant, artistic color combinations
+- Use 3-5 colors maximum (primary, secondary, accent, background, text)
+- Ensure high contrast for readability (minimum 4.5:1 ratio)
+- Choose colors that work well together and create professional appearance
+
+DESIGN REQUIREMENTS FOR COVER SLIDE:
+1. Choose and use a cohesive color palette appropriate to the topic
+2. Create a professional, visually striking cover slide
+3. Include title, subtitle, author (if provided)
+4. Size: 1280x720px (standard presentation ratio)
+5. Use clean, modern typography with Google Fonts
+6. Apply appropriate visual hierarchy
+7. Include subtle geometric elements or patterns that complement the theme
+8. NO background images - use solid colors and gradients only
+9. Ensure high contrast for readability
+
+LAYOUT STRUCTURE:
+- Center-aligned design with clear hierarchy
+- Title: Large, bold, using primary or accent color
+- Subtitle: Medium size, using secondary color
+- Author: Small, positioned at bottom, using text color
+- Add subtle design elements (lines, shapes) using accent color
+- Use background color as the main background
+
+TECHNICAL SPECIFICATIONS:
+- Use Tailwind CSS for styling
+- Include Google Fonts (Roboto family)
+- Material Design principles
+- Responsive design within 1280x720 container
+- Clean, semantic HTML structure
+
+HTML TEMPLATE REFERENCE:
+{html_rules}
+
+CRITICAL INSTRUCTIONS:
+1. First choose your color palette based on the topic "{topic}"
+2. Use EXACTLY those colors throughout the slide
+3. In your HTML, add a comment at the top specifying your chosen colors like this:
+   <!-- COLOR PALETTE: PRIMARY:#hexcode SECONDARY:#hexcode ACCENT:#hexcode BACKGROUND:#hexcode TEXT:#hexcode -->
+4. Apply these colors consistently throughout the slide design
+
+OUTPUT: Generate complete HTML code for the cover slide with your chosen color palette clearly specified in the HTML comment.
+"""
+
+        response = LLM.invoke(cover_slide_prompt)
+        html_content = response.content if hasattr(response, 'content') else str(response)
+        
+        # Extract HTML content
+        start_marker = "<!DOCTYPE html>"
+        end_marker = "</html>"
+        start_idx = html_content.find(start_marker)
+        end_idx = html_content.find(end_marker)
+        if start_idx != -1 and end_idx != -1:
+            html_content = html_content[start_idx:end_idx + len(end_marker)]
+        else:
+            logger.warning("Could not find HTML markers in cover slide response")
+        
+        # Extract color palette from HTML comment
+        color_palette = {}
+        try:
+            import re
+            # Look for color palette comment
+            palette_match = re.search(r'<!-- COLOR PALETTE: (.+?) -->', html_content)
+            if palette_match:
+                palette_text = palette_match.group(1)
+                # Parse color values
+                color_matches = re.findall(r'(\w+):(#[A-Fa-f0-9]{6})', palette_text)
+                for color_name, color_value in color_matches:
+                    color_palette[color_name.lower()] = color_value
+                logger.info(f"Extracted color palette from AI: {color_palette}")
+            else:
+                logger.warning("Could not find color palette comment in HTML")
+                # Fallback: extract colors from CSS classes or styles
+                color_palette = {
+                    "primary": "#2563EB",
+                    "secondary": "#64748B", 
+                    "accent": "#F59E0B",
+                    "background": "#F8FAFC",
+                    "text": "#1E293B"
+                }
+        except Exception as e:
+            logger.error(f"Error extracting color palette: {str(e)}")
+            color_palette = {
+                "primary": "#2563EB",
+                "secondary": "#64748B",
+                "accent": "#F59E0B", 
+                "background": "#F8FAFC",
+                "text": "#1E293B"
+            }
+        
+        # Save the cover slide
+        os.makedirs(GENERATED_SLIDES_DIR, exist_ok=True)
+        output_path = os.path.join(GENERATED_SLIDES_DIR, "slide_001.html")
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        
+        # Save color palette for reference by other slides
+        palette_path = os.path.join(GENERATED_SLIDES_DIR, "color_palette.json")
+        try:
+            # Ensure directory exists
+            os.makedirs(GENERATED_SLIDES_DIR, exist_ok=True)
+            
+            # Write with explicit flushing to ensure data is written
+            with open(palette_path, "w", encoding="utf-8") as f:
+                json.dump(color_palette, f, indent=2, ensure_ascii=False)
+                f.flush()  # Force write to disk
+                os.fsync(f.fileno())  # Ensure OS writes to disk
+            
+            logger.info(f"Color palette saved successfully to {palette_path}")
+        except Exception as e:
+            logger.error(f"Failed to save color palette: {str(e)}")
+            # Continue without failing the entire function
+        
+        logger.info(f"Cover slide generated with AI-chosen colors: {color_palette}")
+        
+        return {
+            "html_content": html_content,
+            "color_palette": color_palette,
+            "slide_path": output_path,
+            "palette_path": palette_path,
+            "topic": topic
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to generate cover slide: {str(e)}", exc_info=True)
+        return {
+            "html_content": f"Failed to generate cover slide: {str(e)}",
+            "color_palette": {},
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
     rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
