@@ -11,10 +11,18 @@ from typing import Optional, Annotated
 # from langgraph.prebuilt import InjectedState
 from langchain.tools import tool
 # from typing import List, Dict
-
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+# Import schemas for structured output
+try:
+    from utils.schemas import ColorPalette, CoverSlideResponse
+except ImportError:
+    # Fallback if import fails
+    logger.warning("Could not import ColorPalette and CoverSlideResponse schemas")
+    pass
+
+
 
 OUTPUT_DIR = os.path.join(os.getcwd(), "semi_output")
 GENERATED_SLIDES_DIR = os.path.join(os.getcwd(), "generated_slides")
@@ -59,6 +67,8 @@ def image_search(search_query: str) -> dict:
     Returns:
         Dictionary with search results including image URLs and local paths
     """
+    logger.info(f"=== image_search tool called ===")
+    logger.info(f"Search Query: {search_query}")
     logger.info(f"Starting image search for query: {search_query}")
     try:
         # Create timestamp for folder name
@@ -177,6 +187,8 @@ def web_search(search_query: str, ) -> dict:
     Returns:
         Dictionary with search results including URLs and content
     """
+    logger.info(f"=== web_search tool called ===")
+    logger.info(f"Search Query: {search_query}")
     logger.info(f"Starting web search for query: {search_query}")
     try:
         searcher: Searxng = Searxng()
@@ -213,15 +225,16 @@ def web_search(search_query: str, ) -> dict:
 @tool  
 def crawl_url(url: str) -> dict:
     """
-    Crawl a webpage URL to extract its text content.
+    Crawl a specific URL to extract content and metadata.
     
     Args:
-        url: The URL of the webpage to crawl
+        url: The URL to crawl
         
     Returns:
-        Dictionary with the extracted content from the webpage
+        Dictionary with crawled content and metadata
     """
-    logger.info(f"Starting URL crawl for: {url}")
+    logger.info(f"=== crawl_url tool called ===")
+    logger.info(f"URL to crawl: {url}")
     try:
         # Remove any extra quotes from the URL
         url = url.strip('"\'')
@@ -253,6 +266,119 @@ def crawl_url(url: str) -> dict:
         logger.error(f"Error in crawl_url: {str(e)}")
         return {"url": url, "content": "Failed to crawl the URL"}
             
+def extract_color_palette_from_html(html_content: str) -> dict:
+    """Extract color palette from generated HTML using AI analysis"""
+    try:
+        # Use AI to extract colors from the HTML
+        extract_prompt = f"""Analyze this HTML and extract the main color palette being used.
+
+HTML CONTENT:
+{html_content[:2000]}...
+
+Extract the 5 main colors used in this slide:
+1. Primary color (main headings, important elements)  
+2. Secondary color (subheadings, secondary elements)
+3. Accent color (highlights, interactive elements)
+4. Background color (main slide background)
+5. Text color (main text content)
+
+Look for colors in:
+- CSS background-color properties
+- CSS color properties  
+- Inline styles
+- Tailwind classes
+
+Respond with JSON format:
+{{
+    "primary": "#colorcode",
+    "secondary": "#colorcode",
+    "accent": "#colorcode", 
+    "background": "#colorcode",
+    "text": "#colorcode"
+}}
+
+Only return the JSON, no explanations."""
+
+        response = LLM_2_5_Flash.invoke(extract_prompt)
+        response_text = response.content if hasattr(response, 'content') else str(response)
+        
+        # Parse JSON response
+        import json
+        import re
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            palette = json.loads(json_match.group())
+            logger.info(f"Successfully extracted color palette from HTML")
+            return palette
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Error extracting color palette from HTML: {e}")
+        return None
+
+def parse_color_requirements_from_instructions(instructions: str) -> dict:
+    """Parse design and color requirements from slide instructions using AI analysis"""
+    
+    # Only analyze if the instructions contain a user request
+    if "User's original request:" not in instructions:
+        return None  # No user request to analyze
+    
+    try:
+        # Use AI to analyze the user's request for design requirements
+        analysis_prompt = f"""Analyze this user request for specific design and color requirements:
+
+{instructions}
+
+If the user has specified specific colors, backgrounds, or design styles in their request, provide a color palette.
+
+Examples of specific requirements:
+- "galaxy background" or "cosmic" → Use space/galaxy colors
+- "wine color" or "wine background" → Use wine/burgundy colors  
+- "blue theme" → Use blue colors
+- "minimalist" → Use clean, simple colors
+- "modern" → Use contemporary color schemes
+- etc.
+
+If you detect specific design requirements, respond with JSON in this format:
+{{
+    "detected": true,
+    "style": "galaxy/wine/blue/minimalist/etc",
+    "palette": {{
+        "primary": "#colorcode",
+        "secondary": "#colorcode", 
+        "accent": "#colorcode",
+        "background": "#colorcode",
+        "text": "#colorcode"
+    }}
+}}
+
+If no specific design requirements are mentioned, respond with:
+{{"detected": false}}
+
+Only detect EXPLICIT mentions of colors/designs, not general topic-based inference."""
+
+        # Use a lightweight LLM for quick analysis
+        response = LLM_2_5_Flash.invoke(analysis_prompt)
+        response_text = response.content if hasattr(response, 'content') else str(response)
+        
+        # Parse JSON response
+        import json
+        import re
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            analysis = json.loads(json_match.group())
+            
+            if analysis.get("detected") and "palette" in analysis:
+                logger.info(f"AI detected design requirement: {analysis.get('style', 'unknown')}")
+                return analysis["palette"]
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Error in AI color analysis: {e}")
+        return None
+            
 @tool
 def generate_slide(slide_number: int, instructions: str, images_urls: str, style: str, content: str) -> str:
     """Generate a single HTML slide and save it to the file system.
@@ -267,13 +393,46 @@ def generate_slide(slide_number: int, instructions: str, images_urls: str, style
         content: The main content for the slide
     """
     try:
-        logger.info(f"generate_slide tool called for slide #{slide_number}")
+        # Enhanced logging for all parameters
+        logger.info(f"=== generate_slide tool called ===")
+        logger.info(f"Slide Number: {slide_number}")
+        logger.info(f"Style: {style}")
+        logger.info(f"Content: {content}")
+        logger.info(f"Images URLs (raw): {images_urls}")
+        logger.info(f"Instructions length: {len(instructions)} characters")
+        logger.info(f"Instructions preview: {instructions[:200]}...")
+        
+        # Log full instructions if not too long
+        if len(instructions) < 1000:
+            logger.info(f"Full instructions: {instructions}")
+        else:
+            logger.info(f"Instructions (first 500 chars): {instructions[:500]}...")
+            logger.info(f"Instructions (last 200 chars): ...{instructions[-200:]}")
+        
+        # Parse and log image data
+        slide_images = []
+        try:
+            if images_urls and images_urls != "[]":
+                parsed_images = json.loads(images_urls)
+                if isinstance(parsed_images, list):
+                    slide_images = parsed_images
+                    logger.info(f"Successfully parsed {len(slide_images)} images:")
+                    for i, img in enumerate(slide_images):
+                        logger.info(f"  Image {i+1}: URL={img.get('url', 'N/A')[:50]}..., Title={img.get('title', 'N/A')[:30]}...")
+                else:
+                    logger.warning(f"Parsed images is not a list: {type(parsed_images)}")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Could not parse images_urls JSON: {e}")
+            logger.warning(f"Raw images_urls: {images_urls}")
+        
         logger.debug(f"generate_slide image_urls: {images_urls}")
         logger.debug(f"generate_slide instructions (first 150 chars): {instructions[:150]}...")
         
-        # Load existing color palette if cover slide was generated
+        # Load existing color palette first to ensure consistency
         color_palette = None
         palette_path = os.path.join(GENERATED_SLIDES_DIR, "color_palette.json")
+        
+        # Check if palette already exists (from previous slides)
         if os.path.exists(palette_path):
             # Implement retry logic for file loading
             max_retries = 3
@@ -315,7 +474,36 @@ def generate_slide(slide_number: int, instructions: str, images_urls: str, style
                             "text": "#1E293B"
                         }
         else:
-            logger.info("No existing color palette found, will use default color guidelines")
+            # No existing palette - check for user requirements and create initial palette
+            user_specified_palette = parse_color_requirements_from_instructions(instructions)
+            
+            if user_specified_palette:
+                color_palette = user_specified_palette
+                logger.info(f"Creating initial color palette from user requirements: {color_palette}")
+                
+                # Save the new palette to file for consistency across all slides
+                try:
+                    with open(palette_path, "w", encoding="utf-8") as f:
+                        json.dump(color_palette, f, indent=2)
+                    logger.info(f"Saved initial color palette to {palette_path}")
+                except Exception as e:
+                    logger.warning(f"Could not save initial color palette: {e}")
+            else:
+                # Create topic-aware color palette if no user requirements found
+                topic_based_palette = create_topic_based_color_palette(instructions, content)
+                if topic_based_palette:
+                    color_palette = topic_based_palette
+                    logger.info(f"Created topic-based color palette: {color_palette}")
+                    
+                    # Save the new palette to file for consistency across all slides
+                    try:
+                        with open(palette_path, "w", encoding="utf-8") as f:
+                            json.dump(color_palette, f, indent=2)
+                        logger.info(f"Saved topic-based color palette to {palette_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not save topic-based color palette: {e}")
+                else:
+                    logger.info("No existing color palette and no user requirements found, will use default color guidelines")
         
         rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
         html_rules = ""
@@ -330,28 +518,67 @@ def generate_slide(slide_number: int, instructions: str, images_urls: str, style
         color_instructions = ""
         if color_palette:
             color_instructions = f"""
-MANDATORY COLOR PALETTE (MUST USE THESE EXACT COLORS TO MATCH COVER SLIDE):
+MANDATORY COLOR PALETTE (MUST USE THESE EXACT COLORS FOR ALL SLIDES):
 - Primary Color: {color_palette.get('primary', '#2563EB')}
 - Secondary Color: {color_palette.get('secondary', '#64748B')}
 - Accent Color: {color_palette.get('accent', '#F59E0B')}
 - Background Color: {color_palette.get('background', '#F8FAFC')}
 - Text Color: {color_palette.get('text', '#1E293B')}
 
-These colors were chosen by AI for the cover slide based on the presentation topic.
-CRITICAL: You MUST use this exact color palette to maintain visual consistency with the cover slide and overall presentation theme.
+CRITICAL CONSISTENCY REQUIREMENTS:
+- ALL slides in this presentation MUST use this exact color palette
+- Use the background color ({color_palette.get('background', '#F8FAFC')}) as the main slide background
+- Use primary color for main headings and important elements
+- Use secondary color for subheadings and secondary elements
+- Use accent color for highlights and interactive elements
+- Ensure text color provides good contrast on the background
 
 Add this comment at the top of your HTML to document color usage:
-<!-- USING COVER SLIDE COLORS: PRIMARY:{color_palette.get('primary', '#2563EB')} SECONDARY:{color_palette.get('secondary', '#64748B')} ACCENT:{color_palette.get('accent', '#F59E0B')} BACKGROUND:{color_palette.get('background', '#F8FAFC')} TEXT:{color_palette.get('text', '#1E293B')} -->
+<!-- USING PRESENTATION COLORS: PRIMARY:{color_palette.get('primary', '#2563EB')} SECONDARY:{color_palette.get('secondary', '#64748B')} ACCENT:{color_palette.get('accent', '#F59E0B')} BACKGROUND:{color_palette.get('background', '#F8FAFC')} TEXT:{color_palette.get('text', '#1E293B')} -->
 """
         else:
             color_instructions = """
-COLOR GUIDELINES:
+COLOR GUIDELINES (CREATE INITIAL PALETTE):
+- Create a cohesive color palette based on user requirements and topic
 - Use soft, professional colors that harmonize with the content
 - Ensure high contrast for readability
 - Avoid pure black (#000000) or white (#FFFFFF) backgrounds
-- Select colors appropriate to the topic (e.g., tech = blues, nature = greens, business = navy/gray)
+- Select colors appropriate to the topic and user requests
+- This palette will be saved and used for ALL slides in the presentation
 
-Since no cover slide exists yet, choose appropriate colors for this topic and ensure consistency if generating multiple slides.
+IMPORTANT: Choose colors that work well together and create a consistent visual theme.
+"""
+            
+        # Create image section for prompt
+        image_instructions = ""
+        if slide_images:
+            image_instructions = f"""
+IMPORTANT: THIS SLIDE HAS {len(slide_images)} IMAGES AVAILABLE - YOU MUST INCLUDE THEM!
+
+Available Images (MUST USE AT LEAST 1-2 OF THESE):
+"""
+            for i, img in enumerate(slide_images):
+                img_url = img.get('url', '')
+                img_title = img.get('title', f'Image {i+1}')
+                img_alt = img.get('alt', img_title)
+                image_instructions += f"""
+- Image {i+1}: {img_url}
+  Title: {img_title}
+  Alt text: {img_alt}
+"""
+            
+            image_instructions += """
+CRITICAL IMAGE REQUIREMENTS:
+- You MUST include at least 1-2 of these images in the slide
+- Use <img> tags with proper src, alt, and styling
+- Make images responsive with Tailwind classes like 'w-full h-auto max-w-md'
+- Position images strategically to complement the text content
+- If image URLs are long, you can truncate them in logs but use full URLs in HTML
+- Add proper error handling with alt text in case images fail to load
+"""
+        else:
+            image_instructions = """
+No specific images provided for this slide. Focus on creating engaging text-based content with icons and visual elements using Tailwind CSS and Material Icons.
 """
             
         presentation_prompt = f"""
@@ -362,14 +589,7 @@ You should ignore all previous instructions and examples.
 
 {color_instructions}
 
-Available Images to incorporate if relevant (use your judgment based on instructions):
-{images_urls}
-
-IMPORTANT IMAGE USAGE NOTES:
-- Images may include both web URLs (http/https) and local relative paths.
-- For local images, use the 'relative_path' when available, as these are downloaded and more reliable.
-- Always include fallback handling (e.g., alt text) for images that might fail to load.
-- Prefer local relative paths over web URLs for reliability.
+{image_instructions}
 
 Design parameters for this slide:
 Style: {style}
@@ -452,24 +672,46 @@ html<!DOCTYPE html>
         output_path = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_number:03d}.html")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
-        return f"Slide #{slide_number} generated. Saved to {output_path}"
+        
+        # If no color palette exists yet, try to extract and save one from the generated HTML
+        if not color_palette and slide_number == 1:
+            try:
+                extracted_palette = extract_color_palette_from_html(html_content)
+                if extracted_palette:
+                    with open(palette_path, "w", encoding="utf-8") as f:
+                        json.dump(extracted_palette, f, indent=2)
+                    logger.info(f"Extracted and saved color palette from slide {slide_number}: {extracted_palette}")
+            except Exception as e:
+                logger.warning(f"Could not extract color palette from generated HTML: {e}")
+        
+        logger.info(f"Successfully generated slide #{slide_number}. Saved to {output_path}")
+        return html_content  # Return the HTML content instead of status message
     except Exception as e:
         logger.error(f"Failed to generate slide #{slide_number}: {str(e)}", exc_info=True)
         return f"Failed to generate slide #{slide_number}: {str(e)}"
     
 @tool
 def update_slide(slide_number: int, new_content: str, original_html: str, preserve_design: bool = True) -> str:
-    """Update an existing slide with new content while optionally preserving the original design.
+    """
+    Update an existing slide with new content while preserving the design.
     
     Args:
         slide_number: The slide number to update
-        new_content: The new text content for the slide
+        new_content: The new content to replace the existing content
         original_html: The original HTML content of the slide
-        preserve_design: Whether to preserve the original design and styling
-    """
-    try:
-        logger.info(f"update_slide tool called for slide #{slide_number}")
+        preserve_design: Whether to preserve the original design (default: True)
         
+    Returns:
+        Updated HTML content for the slide
+    """
+    logger.info(f"=== update_slide tool called ===")
+    logger.info(f"Slide Number: {slide_number}")
+    logger.info(f"New Content: {new_content}")
+    logger.info(f"Preserve Design: {preserve_design}")
+    logger.info(f"Original HTML length: {len(original_html)} characters")
+    logger.info(f"Original HTML preview: {original_html[:200]}...")
+    
+    try:
         if preserve_design:
             # Use AI to intelligently update the slide while preserving design
             rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")
@@ -553,6 +795,14 @@ def generate_cover_slide(title: str, subtitle: str, topic: str, author: str = ""
         Dictionary containing the HTML content and extracted color palette
     """
     try:
+        # Enhanced logging for all parameters
+        logger.info(f"=== generate_cover_slide tool called ===")
+        logger.info(f"Title: {title}")
+        logger.info(f"Subtitle: {subtitle}")
+        logger.info(f"Topic: {topic}")
+        logger.info(f"Author: {author}")
+        logger.info(f"Style: {style}")
+        
         logger.info(f"generate_cover_slide tool called for topic: {topic}")
         
         # Load HTML rules
@@ -578,55 +828,75 @@ Style: {style}
 COLOR PALETTE SELECTION TASK:
 You must choose an appropriate color palette that fits the topic "{topic}" and create a cohesive visual theme.
 
-COLOR SELECTION GUIDELINES:
-- Analyze the topic and choose colors that reinforce the subject matter
-- For technology topics: Consider blues, cyans, silvers, or modern tech colors
-- For historical topics: Consider earth tones, ancient colors, warm browns
-- For business topics: Consider professional blues, grays, accent golds
-- For nature topics: Consider greens, browns, earth tones
-- For medical topics: Consider clean blues, whites, soft greens
-- For creative topics: Consider vibrant, artistic color combinations
-- Use 3-5 colors maximum (primary, secondary, accent, background, text)
-- Ensure high contrast for readability (minimum 4.5:1 ratio)
-- Choose colors that work well together and create professional appearance
+TOPIC-SPECIFIC COLOR GUIDELINES:
+- Technology/AI topics: Deep blues (#1E40AF), tech cyans (#06B6D4), modern purples (#6366F1)
+- Business/Corporate: Professional blues (#1E40AF), slate grays (#64748B), gold accents (#F59E0B)
+- Nature/Environment: Forest greens (#059669), earth browns (#92400E), natural teals (#0D9488)
+- Health/Medical: Clean blues (#0EA5E9), medical greens (#10B981), safe whites (#F0F9FF)
+- Education: Warm oranges (#EA580C), academic blues (#1D4ED8), knowledge purples (#7C3AED)
+- Creative/Art: Vibrant magentas (#C026D3), artistic oranges (#EA580C), creative purples (#A855F7)
+- Science: Scientific blues (#1E40AF), lab greens (#059669), neutral grays (#6B7280)
+- Byzantine Empire: Imperial purple (#7C2D92), deep red (#B91C1C), gold accents (#F59E0B), warm ivory background (#FEF7F0)
+- Roman Empire: Imperial red (#B91C1C), stone gray (#78716C), gold accents (#F59E0B), marble white background (#FAFAF9)
+- Egyptian: Deep blue (#1E40AF), sand gold (#CA8A04), bright gold accents (#F59E0B), sand background (#FFFBEB)
+- Medieval: Deep burgundy (#7F1D1D), forest green (#14532D), gold accents (#F59E0B), parchment background (#F7F3F0)
+- Renaissance: Rich burgundy (#7F1D1D), deep blue (#1E40AF), gold accents (#F59E0B), warm cream background (#FEF7F0)
+- Ancient/Historical: Royal purple (#7C2D92), ancient bronze (#92400E), gold accents (#F59E0B), aged parchment background (#FEF7F0)
+- Chinese History: Chinese red (#B91C1C), imperial gold (#CA8A04), bright gold accents (#F59E0B), silk white background (#FFFBEB)
+- Japanese History: Traditional deep red (#7F1D1D), charcoal black (#1F2937), gold accents (#F59E0B), pure white background (#FEFEFE)
 
-DESIGN REQUIREMENTS FOR COVER SLIDE:
-1. Choose and use a cohesive color palette appropriate to the topic
-2. Create a professional, visually striking cover slide
-3. Include title, subtitle, author (if provided)
-4. Size: 1280x720px (standard presentation ratio)
-5. Use clean, modern typography with Google Fonts
-6. Apply appropriate visual hierarchy
-7. Include subtle geometric elements or patterns that complement the theme
-8. NO background images - use solid colors and gradients only
-9. Ensure high contrast for readability
+COLOR SELECTION RULES:
+1. Choose exactly 5 colors: primary, secondary, accent, background, text
+2. Ensure minimum 4.5:1 contrast ratio between text and background
+3. Primary: Main brand/theme color (for titles)
+4. Secondary: Supporting color (for subtitles)
+5. Accent: Highlight color (for call-to-action elements)
+6. Background: Main slide background (light/neutral)
+7. Text: Main reading color (dark for light backgrounds)
+
+DESIGN REQUIREMENTS:
+1. Size: 1280x720px (standard presentation ratio)
+2. Center-aligned design with clear visual hierarchy
+3. Title: Large (48-72px), bold, using primary color
+4. Subtitle: Medium (24-32px), using secondary color
+5. Author: Small (16-20px), positioned at bottom
+6. Include 2-3 subtle geometric elements using accent color
+7. Use gradients or solid colors only (NO images)
+8. Modern, professional appearance
 
 LAYOUT STRUCTURE:
-- Center-aligned design with clear hierarchy
-- Title: Large, bold, using primary or accent color
-- Subtitle: Medium size, using secondary color
-- Author: Small, positioned at bottom, using text color
-- Add subtle design elements (lines, shapes) using accent color
-- Use background color as the main background
+- Main content area: Centered vertically and horizontally
+- Title: Most prominent, top of content area
+- Subtitle: Below title with appropriate spacing
+- Author: Bottom of slide, smaller font
+- Decorative elements: Subtle lines, shapes, or patterns
+- Background: Clean, using background color
 
 TECHNICAL SPECIFICATIONS:
-- Use Tailwind CSS for styling
-- Include Google Fonts (Roboto family)
-- Material Design principles
-- Responsive design within 1280x720 container
-- Clean, semantic HTML structure
+- HTML5 semantic structure
+- Tailwind CSS for styling
+- Google Fonts (Roboto family recommended)
+- Responsive design principles
+- Clean, accessible markup
 
-HTML TEMPLATE REFERENCE:
+CRITICAL COLOR PALETTE REQUIREMENT:
+You MUST include this exact comment at the very beginning of your HTML (right after <!DOCTYPE html>):
+
+   <!-- COLOR PALETTE: PRIMARY:#hexcode SECONDARY:#hexcode ACCENT:#hexcode BACKGROUND:#hexcode TEXT:#hexcode -->
+
+Example:
+<!-- COLOR PALETTE: PRIMARY:#1E40AF SECONDARY:#6366F1 ACCENT:#06B6D4 BACKGROUND:#F8FAFC TEXT:#1E293B -->
+
+IMPORTANT:
+- Use ONLY hex color codes (6 digits with #)
+- Apply these exact colors consistently throughout the HTML
+- The comment MUST be on its own line after <!DOCTYPE html>
+- Make sure all colors work well together and fit the topic
+
+HTML RULES REFERENCE:
 {html_rules}
 
-CRITICAL INSTRUCTIONS:
-1. First choose your color palette based on the topic "{topic}"
-2. Use EXACTLY those colors throughout the slide
-3. In your HTML, add a comment at the top specifying your chosen colors like this:
-   <!-- COLOR PALETTE: PRIMARY:#hexcode SECONDARY:#hexcode ACCENT:#hexcode BACKGROUND:#hexcode TEXT:#hexcode -->
-4. Apply these colors consistently throughout the slide design
-
-OUTPUT: Generate complete HTML code for the cover slide with your chosen color palette clearly specified in the HTML comment.
+OUTPUT: Generate complete HTML code for the cover slide with the color palette comment at the top and consistent color usage throughout.
 """
 
         response = LLM.invoke(cover_slide_prompt)
@@ -642,31 +912,88 @@ OUTPUT: Generate complete HTML code for the cover slide with your chosen color p
         else:
             logger.warning("Could not find HTML markers in cover slide response")
         
-        # Extract color palette from HTML comment
+        # Extract color palette from HTML using multiple methods
         color_palette = {}
         try:
             import re
-            # Look for color palette comment
-            palette_match = re.search(r'<!-- COLOR PALETTE: (.+?) -->', html_content)
+            
+            # Method 1: Look for color palette comment
+            palette_match = re.search(r'<!-- COLOR PALETTE: (.+?) -->', html_content, re.IGNORECASE)
             if palette_match:
                 palette_text = palette_match.group(1)
                 # Parse color values
                 color_matches = re.findall(r'(\w+):(#[A-Fa-f0-9]{6})', palette_text)
                 for color_name, color_value in color_matches:
                     color_palette[color_name.lower()] = color_value
-                logger.info(f"Extracted color palette from AI: {color_palette}")
-            else:
-                logger.warning("Could not find color palette comment in HTML")
-                # Fallback: extract colors from CSS classes or styles
-                color_palette = {
-                    "primary": "#2563EB",
-                    "secondary": "#64748B", 
-                    "accent": "#F59E0B",
-                    "background": "#F8FAFC",
-                    "text": "#1E293B"
-                }
+                logger.info(f"Extracted color palette from HTML comment: {color_palette}")
+            
+            # Method 2: If comment method failed, extract from CSS styles/classes
+            if not color_palette or len(color_palette) < 3:
+                logger.info("Trying to extract colors from CSS styles...")
+                
+                # Look for hex colors in the HTML
+                hex_colors = re.findall(r'#[A-Fa-f0-9]{6}', html_content)
+                unique_colors = list(set(hex_colors))  # Remove duplicates
+                
+                if len(unique_colors) >= 3:
+                    # Assign colors based on common patterns
+                    color_palette = {
+                        "primary": unique_colors[0] if len(unique_colors) > 0 else "#2563EB",
+                        "secondary": unique_colors[1] if len(unique_colors) > 1 else "#64748B",
+                        "accent": unique_colors[2] if len(unique_colors) > 2 else "#F59E0B",
+                        "background": unique_colors[3] if len(unique_colors) > 3 else "#F8FAFC",
+                        "text": unique_colors[4] if len(unique_colors) > 4 else "#1E293B"
+                    }
+                    logger.info(f"Extracted color palette from CSS: {color_palette}")
+                    logger.info(f"Found {len(unique_colors)} unique colors: {unique_colors}")
+            
+            # Method 3: Use AI to analyze and extract colors
+            if not color_palette or len(color_palette) < 3:
+                logger.info("Using AI to analyze and extract color palette from generated HTML...")
+                analyze_prompt = f"""
+Analyze this HTML content and extract the main color palette used. Look for background colors, text colors, border colors, etc.
+
+HTML CONTENT (first 2000 chars):
+{html_content[:2000]}
+
+Return ONLY a JSON object in this exact format:
+{{
+    "primary": "#hexcode",
+    "secondary": "#hexcode", 
+    "accent": "#hexcode",
+    "background": "#hexcode",
+    "text": "#hexcode"
+}}
+
+IMPORTANT: 
+- Only return the JSON object, no other text
+- Use actual hex color codes found in the HTML
+- If you can't find 5 colors, use appropriate defaults for missing ones
+- Ensure colors are appropriate for the topic: {topic}
+"""
+                
+                try:
+                    analyze_response = LLM.invoke(analyze_prompt)
+                    analyze_content = analyze_response.content if hasattr(analyze_response, 'content') else str(analyze_response)
+                    
+                    # Try to parse JSON from response
+                    import json
+                    json_match = re.search(r'\{[^}]+\}', analyze_content)
+                    if json_match:
+                        extracted_palette = json.loads(json_match.group())
+                        if all(key in extracted_palette for key in ['primary', 'secondary', 'accent', 'background', 'text']):
+                            color_palette = extracted_palette
+                            logger.info(f"Successfully extracted color palette using AI analysis: {color_palette}")
+                        else:
+                            logger.warning("AI-extracted palette missing required keys")
+                    else:
+                        logger.warning("Could not find JSON in AI analysis response")
+                except Exception as ai_error:
+                    logger.warning(f"AI color analysis failed: {str(ai_error)}")
+            
         except Exception as e:
             logger.error(f"Error extracting color palette: {str(e)}")
+            # Ultimate fallback
             color_palette = {
                 "primary": "#2563EB",
                 "secondary": "#64748B",
@@ -687,34 +1014,245 @@ OUTPUT: Generate complete HTML code for the cover slide with your chosen color p
             # Ensure directory exists
             os.makedirs(GENERATED_SLIDES_DIR, exist_ok=True)
             
+            # Ensure color palette has all required fields before saving
+            complete_palette = {
+                "primary": color_palette.get("primary", "#2563EB"),
+                "secondary": color_palette.get("secondary", "#64748B"),
+                "accent": color_palette.get("accent", "#F59E0B"),
+                "background": color_palette.get("background", "#F8FAFC"),
+                "text": color_palette.get("text", "#1E293B")
+            }
+            
+            # Update color_palette with complete version
+            color_palette.update(complete_palette)
+            
             # Write with explicit flushing to ensure data is written
+            import json  # Import json for saving
             with open(palette_path, "w", encoding="utf-8") as f:
-                json.dump(color_palette, f, indent=2, ensure_ascii=False)
+                json.dump(complete_palette, f, indent=2, ensure_ascii=False)
                 f.flush()  # Force write to disk
                 os.fsync(f.fileno())  # Ensure OS writes to disk
             
-            logger.info(f"Color palette saved successfully to {palette_path}")
+            logger.info(f"Structured color palette saved successfully to {palette_path}: {complete_palette}")
         except Exception as e:
             logger.error(f"Failed to save color palette: {str(e)}")
             # Continue without failing the entire function
         
         logger.info(f"Cover slide generated with AI-chosen colors: {color_palette}")
         
+        # Return structured response with validated color palette
+        try:
+            # Validate and structure the color palette
+            if 'ColorPalette' in globals():
+                structured_palette = ColorPalette(**color_palette)
+                structured_response = CoverSlideResponse(
+                    html_content=html_content,
+                    color_palette=structured_palette,
+                    topic=topic
+                )
+                
+                # Convert to dict for tool return
+                result = {
+                    "html_content": html_content,
+                    "color_palette": structured_palette.dict(),
+                    "slide_path": output_path,
+                    "palette_path": palette_path,
+                    "topic": topic,
+                    "structured": True  # Flag indicating structured format
+                }
+            else:
+                # Fallback if schemas not available
+                result = {
+                    "html_content": html_content,
+                    "color_palette": color_palette,
+                    "slide_path": output_path,
+                    "palette_path": palette_path,
+                    "topic": topic,
+                    "structured": False
+                }
+            
+            logger.info(f"Cover slide generated successfully with structured color palette: {color_palette}")
+            return result
+            
+        except Exception as structure_error:
+            logger.warning(f"Could not structure response, using fallback: {structure_error}")
         return {
             "html_content": html_content,
             "color_palette": color_palette,
             "slide_path": output_path,
             "palette_path": palette_path,
-            "topic": topic
+                "topic": topic,
+                "structured": False
         }
         
     except Exception as e:
         logger.error(f"Failed to generate cover slide: {str(e)}", exc_info=True)
+        
+        # Create fallback color palette based on topic even in error case
+        error_color_palette = {}
+        try:
+            topic_lower = topic.lower() if topic else ""
+            if any(word in topic_lower for word in ['ai', 'tech', 'digital']):
+                error_color_palette = {
+                    "primary": "#1E40AF", "secondary": "#6366F1", "accent": "#06B6D4",
+                    "background": "#F8FAFC", "text": "#1E293B"
+                }
+            elif any(word in topic_lower for word in ['business', 'corporate']):
+                error_color_palette = {
+                    "primary": "#1E40AF", "secondary": "#64748B", "accent": "#F59E0B",
+                    "background": "#F8FAFC", "text": "#1E293B"
+                }
+            elif any(word in topic_lower for word in ['byzantine', 'constantinople', 'eastern roman']):
+                error_color_palette = {
+                    "primary": "#7C2D92", "secondary": "#B91C1C", "accent": "#F59E0B",
+                    "background": "#FEF7F0", "text": "#7C2D12"
+                }
+            elif any(word in topic_lower for word in ['roman', 'rome', 'latin', 'caesar']):
+                error_color_palette = {
+                    "primary": "#B91C1C", "secondary": "#78716C", "accent": "#F59E0B",
+                    "background": "#FAFAF9", "text": "#44403C"
+                }
+            elif any(word in topic_lower for word in ['ancient', 'history', 'historical', 'civilization', 'empire']):
+                error_color_palette = {
+                    "primary": "#7C2D92", "secondary": "#92400E", "accent": "#F59E0B",
+                    "background": "#FEF7F0", "text": "#78350F"
+                }
+            else:
+                error_color_palette = {
+                    "primary": "#2563EB", "secondary": "#64748B", "accent": "#F59E0B",
+                    "background": "#F8FAFC", "text": "#1E293B"
+                }
+        except:
+            error_color_palette = {
+                "primary": "#2563EB", "secondary": "#64748B", "accent": "#F59E0B",
+                "background": "#F8FAFC", "text": "#1E293B"
+            }
+        
         return {
             "html_content": f"Failed to generate cover slide: {str(e)}",
-            "color_palette": {},
+            "color_palette": error_color_palette,
+            "slide_path": "",
+            "palette_path": "",
+            "topic": topic,
+            "structured": True,  # Even error responses have structured palette
             "error": str(e)
         }
+
+def create_topic_based_color_palette(instructions: str, content: str) -> dict:
+    """Create a color palette based on detected topic from instructions and content"""
+    
+    try:
+        # Combine instructions and content for topic analysis
+        combined_text = f"{instructions} {content}".lower()
+        
+        logger.info(f"Analyzing topic from combined text: {combined_text[:200]}...")
+        
+        # Historical/Cultural topics
+        if any(word in combined_text for word in ['byzantine', 'constantinople', 'eastern roman']):
+            return {
+                "primary": "#7C2D92",      # Imperial purple
+                "secondary": "#B91C1C",    # Deep red
+                "accent": "#F59E0B",       # Gold accent
+                "background": "#FEF7F0",   # Warm ivory
+                "text": "#7C2D12"          # Dark brown
+            }
+        elif any(word in combined_text for word in ['roman', 'rome', 'latin', 'caesar']):
+            return {
+                "primary": "#B91C1C",      # Imperial red
+                "secondary": "#78716C",    # Stone gray
+                "accent": "#F59E0B",       # Gold accent
+                "background": "#FAFAF9",   # Marble white
+                "text": "#44403C"          # Dark stone
+            }
+        elif any(word in combined_text for word in ['egyptian', 'egypt', 'pharaoh', 'pyramid']):
+            return {
+                "primary": "#1E40AF",      # Deep blue (Nile)
+                "secondary": "#CA8A04",    # Sand gold
+                "accent": "#F59E0B",       # Bright gold
+                "background": "#FFFBEB",   # Sand background
+                "text": "#78350F"          # Dark bronze
+            }
+        elif any(word in combined_text for word in ['medieval', 'middle age', 'knight', 'feudal']):
+            return {
+                "primary": "#7F1D1D",      # Deep burgundy
+                "secondary": "#14532D",    # Forest green
+                "accent": "#F59E0B",       # Gold accent
+                "background": "#F7F3F0",   # Parchment
+                "text": "#451A03"          # Dark brown
+            }
+        elif any(word in combined_text for word in ['renaissance', 'florence', 'da vinci', 'michelangelo']):
+            return {
+                "primary": "#7F1D1D",      # Rich burgundy
+                "secondary": "#1E40AF",    # Deep blue
+                "accent": "#F59E0B",       # Gold accent
+                "background": "#FEF7F0",   # Warm cream
+                "text": "#7C2D12"          # Rich brown
+            }
+        elif any(word in combined_text for word in ['ancient', 'history', 'historical', 'civilization', 'empire']):
+            return {
+                "primary": "#7C2D92",      # Royal purple
+                "secondary": "#92400E",    # Ancient bronze
+                "accent": "#F59E0B",       # Gold accent
+                "background": "#FEF7F0",   # Aged parchment
+                "text": "#78350F"          # Deep brown
+            }
+        elif any(word in combined_text for word in ['chinese', 'china', 'dynasty', 'confucius']):
+            return {
+                "primary": "#B91C1C",      # Chinese red
+                "secondary": "#CA8A04",    # Imperial gold
+                "accent": "#F59E0B",       # Bright gold
+                "background": "#FFFBEB",   # Silk white
+                "text": "#7C2D12"          # Dark lacquer
+            }
+        elif any(word in combined_text for word in ['japanese', 'japan', 'samurai', 'edo', 'meiji']):
+            return {
+                "primary": "#7F1D1D",      # Deep red (traditional)
+                "secondary": "#1F2937",    # Charcoal black
+                "accent": "#F59E0B",       # Gold accent
+                "background": "#FEFEFE",   # Pure white
+                "text": "#111827"          # Black ink
+            }
+        
+        # Modern topics
+        elif any(word in combined_text for word in ['ai', 'artificial intelligence', 'machine learning', 'tech', 'digital']):
+            return {
+                "primary": "#1E40AF",      # Tech blue
+                "secondary": "#6366F1",    # Modern purple-blue
+                "accent": "#06B6D4",       # Cyan accent
+                "background": "#F8FAFC",   # Light gray-blue
+                "text": "#1E293B"          # Dark slate
+            }
+        elif any(word in combined_text for word in ['business', 'finance', 'corporate']):
+            return {
+                "primary": "#1E40AF",      # Professional blue
+                "secondary": "#64748B",    # Slate gray
+                "accent": "#F59E0B",       # Gold accent
+                "background": "#F8FAFC",   # Off-white
+                "text": "#1E293B"          # Dark text
+            }
+        elif any(word in combined_text for word in ['nature', 'environment', 'green', 'eco']):
+            return {
+                "primary": "#059669",      # Green
+                "secondary": "#0D9488",    # Teal
+                "accent": "#84CC16",       # Lime accent
+                "background": "#F0FDF4",   # Light green
+                "text": "#064E3B"          # Dark green
+            }
+        elif any(word in combined_text for word in ['health', 'medical', 'healthcare']):
+            return {
+                "primary": "#0EA5E9",      # Medical blue
+                "secondary": "#06B6D4",    # Light blue
+                "accent": "#10B981",       # Health green
+                "background": "#F0F9FF",   # Light blue bg
+                "text": "#0C4A6E"          # Dark blue text
+            }
+        
+        # No specific topic detected
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Error in topic-based color palette creation: {e}")
+        return None
 
 if __name__ == "__main__":
     rules_html_path = os.path.join(os.getcwd(), "rules", "html.txt")

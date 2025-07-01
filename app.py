@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify, send_file
 from flask_socketio import SocketIO, emit
 import json
 import threading
@@ -13,6 +13,12 @@ import asyncio
 import queue
 from models.LLMs import Claude_3_7_Sonnet, Gemini, Gemini_2_5_Flash, GPT_o3
 from bs4 import BeautifulSoup
+from utils.pdf_export import (
+    export_single_slide_to_pdf, 
+    export_all_slides_in_directory, 
+    export_slides_to_pdf,
+    get_all_slides_in_directory
+)
 
 # Initialize all LLM models for fallback
 LLM_CLAUDE = Claude_3_7_Sonnet()
@@ -48,6 +54,261 @@ slide_queues = {}
 def index():
     return render_template('index.html')
 
+@app.route('/export_pdf/<int:slide_number>')
+def export_single_slide_pdf(slide_number):
+    """Export a single slide to PDF"""
+    try:
+        logger.info(f"PDF export request for slide {slide_number}")
+        
+        # Find the slide file
+        slide_file = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_number:03d}.html")
+        
+        if not os.path.exists(slide_file):
+            return jsonify({
+                "success": False,
+                "error": f"Slide {slide_number} not found"
+            }), 404
+        
+        # Create output path in exports directory
+        exports_dir = os.path.join(os.getcwd(), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"slide_{slide_number:03d}_{timestamp}.pdf"
+        output_path = os.path.join(exports_dir, output_filename)
+        
+        # Export to PDF
+        result = export_single_slide_to_pdf(slide_file, output_path)
+        
+        if result["success"]:
+            logger.info(f"Successfully exported slide {slide_number} to PDF")
+            return send_file(
+                output_path,
+                as_attachment=True,
+                download_name=output_filename,
+                mimetype='application/pdf'
+            )
+        else:
+            logger.error(f"Failed to export slide {slide_number}: {result['error']}")
+            return jsonify(result), 500
+            
+    except Exception as e:
+        logger.error(f"Error exporting slide {slide_number} to PDF: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/export_pdf/all')
+def export_all_slides_pdf():
+    """Export all slides to a combined PDF"""
+    try:
+        logger.info("PDF export request for all slides")
+        
+        # Get all slides in the directory
+        slide_files = get_all_slides_in_directory(GENERATED_SLIDES_DIR)
+        
+        if not slide_files:
+            return jsonify({
+                "success": False,
+                "error": "No slides found to export"
+            }), 404
+        
+        logger.info(f"Found {len(slide_files)} slides to export")
+        
+        # Create output path in exports directory
+        exports_dir = os.path.join(os.getcwd(), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"presentation_{timestamp}.pdf"
+        output_path = os.path.join(exports_dir, output_filename)
+        
+        # Export all slides to combined PDF
+        result = export_all_slides_in_directory(GENERATED_SLIDES_DIR, output_path)
+        
+        if result["success"]:
+            logger.info(f"Successfully exported {len(slide_files)} slides to combined PDF")
+            return send_file(
+                output_path,
+                as_attachment=True,
+                download_name=output_filename,
+                mimetype='application/pdf'
+            )
+        else:
+            logger.error(f"Failed to export slides: {result['error']}")
+            return jsonify(result), 500
+            
+    except Exception as e:
+        logger.error(f"Error exporting all slides to PDF: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/export_pdf/individual')
+def export_individual_slides_pdf():
+    """Export all slides to individual PDF files and return as ZIP"""
+    try:
+        logger.info("PDF export request for individual slides")
+        
+        # Get all slides in the directory
+        slide_files = get_all_slides_in_directory(GENERATED_SLIDES_DIR)
+        
+        if not slide_files:
+            return jsonify({
+                "success": False,
+                "error": "No slides found to export"
+            }), 404
+        
+        logger.info(f"Found {len(slide_files)} slides to export individually")
+        
+        # Create temporary directory for individual PDFs
+        import tempfile
+        import zipfile
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pdf_files = []
+            
+            # Export each slide individually
+            for i, slide_file in enumerate(slide_files, 1):
+                slide_name = os.path.splitext(os.path.basename(slide_file))[0]
+                pdf_filename = f"{slide_name}.pdf"
+                pdf_path = os.path.join(temp_dir, pdf_filename)
+                
+                result = export_single_slide_to_pdf(slide_file, pdf_path)
+                if result["success"]:
+                    pdf_files.append((pdf_path, pdf_filename))
+                    logger.info(f"Exported slide {i} successfully")
+                else:
+                    logger.warning(f"Failed to export slide {i}: {result['error']}")
+            
+            if not pdf_files:
+                return jsonify({
+                    "success": False,
+                    "error": "No slides could be exported"
+                }), 500
+            
+            # Create ZIP file with all PDFs
+            exports_dir = os.path.join(os.getcwd(), "exports")
+            os.makedirs(exports_dir, exist_ok=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            zip_filename = f"slides_individual_{timestamp}.zip"
+            zip_path = os.path.join(exports_dir, zip_filename)
+            
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for pdf_path, pdf_filename in pdf_files:
+                    zip_file.write(pdf_path, pdf_filename)
+            
+            logger.info(f"Successfully created ZIP with {len(pdf_files)} individual PDFs")
+            
+            return send_file(
+                zip_path,
+                as_attachment=True,
+                download_name=zip_filename,
+                mimetype='application/zip'
+            )
+            
+    except Exception as e:
+        logger.error(f"Error exporting individual slides to PDF: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/export_selected_slides_pdf', methods=['POST'])
+def export_selected_slides_pdf():
+    """Export selected slides to a combined PDF"""
+    try:
+        logger.info("Export selected slides to PDF request received")
+        
+        data = request.get_json()
+        slide_numbers = data.get('slide_numbers', [])
+        
+        if not slide_numbers:
+            return jsonify({
+                "success": False,
+                "error": "No slide numbers provided"
+            }), 400
+        
+        # Get selected slide files
+        slide_files = []
+        for slide_num in slide_numbers:
+            slide_file = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_num:03d}.html")
+            if os.path.exists(slide_file):
+                slide_files.append(slide_file)
+        
+        if not slide_files:
+            return jsonify({
+                "success": False,
+                "error": "None of the selected slides were found"
+            }), 404
+        
+        # Create output path in exports directory
+        exports_dir = os.path.join(os.getcwd(), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        slides_str = "_".join(map(str, sorted(slide_numbers)))
+        output_filename = f"selected_slides_{slides_str}_{timestamp}.pdf"
+        output_path = os.path.join(exports_dir, output_filename)
+        
+        # Export using our utility
+        result = export_slides_to_pdf(slide_files, output_path, method="auto", combine=True)
+        
+        if result["success"]:
+            return send_file(
+                output_path,
+                as_attachment=True,
+                download_name=output_filename,
+                mimetype='application/pdf'
+            )
+        else:
+            return jsonify({
+                "success": False,
+                "error": result["error"]
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error in export_selected_slides_pdf: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/slides/available')
+def get_available_slides():
+    """Get list of available slides for export"""
+    try:
+        slide_files = get_all_slides_in_directory(GENERATED_SLIDES_DIR)
+        
+        slides_info = []
+        for slide_file in slide_files:
+            filename = os.path.basename(slide_file)
+            # Extract slide number from filename (e.g., slide_001.html -> 1)
+            slide_number = int(filename.split('_')[1].split('.')[0])
+            
+            slides_info.append({
+                "slide_number": slide_number,
+                "filename": filename,
+                "path": slide_file,
+                "exists": os.path.exists(slide_file)
+            })
+        
+        return jsonify({
+            "success": True,
+            "slides": slides_info,
+            "total_slides": len(slides_info)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting available slides: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @socketio.on('connect')
 def handle_connect():
     session_id = str(uuid.uuid4())
@@ -57,6 +318,17 @@ def handle_connect():
         'slides': []
     }
     slide_queues[session_id] = queue.Queue()
+    
+    # Clear previous session data to ensure fresh start
+    # This prevents color palette from previous presentations being reused
+    try:
+        palette_path = os.path.join(GENERATED_SLIDES_DIR, "color_palette.json")
+        if os.path.exists(palette_path):
+            os.remove(palette_path)
+            logger.info(f"Cleared previous color palette for new session: {session_id}")
+    except Exception as e:
+        logger.warning(f"Could not clear previous color palette: {e}")
+    
     emit('session_created', {'session_id': session_id})
     logger.info(f"Client connected: {request.sid} with session {session_id}")
     logger.info(f"Active sessions: {list(active_sessions.keys())}")
@@ -448,10 +720,11 @@ def handle_text_edit(data):
                     logger.info(f"Updated slide content in session")
                     session_found = True
                     break
-            
-            if not session_found:
-                logger.warning(f"Slide {slide_number} not found in session slides")
-        else:
+        
+        if not session_found:
+            logger.warning(f"Slide {slide_number} not found in session slides")
+        
+        if request.sid not in active_sessions:
             logger.warning(f"Session {request.sid} not found in active_sessions")
         
         # Send updated slide back to client
@@ -614,10 +887,8 @@ def update_text_in_html(html_content, text_id, original_text, new_text, is_rich_
                     new_soup = BeautifulSoup(new_text, 'html.parser')
                     for content in new_soup.contents:
                         if hasattr(content, 'name'):
-                            # It's a tag
                             target_element.append(content)
                         else:
-                            # It's text
                             target_element.append(str(content))
                     
                     logger.info(f"Updated rich text element {text_id}: '{original_text}' -> rich HTML content")
@@ -630,8 +901,8 @@ def update_text_in_html(html_content, text_id, original_text, new_text, is_rich_
                         # Complex case: element has mixed content, replace text nodes
                         target_element.clear()
                         target_element.append(new_text)
-                    
-                    logger.info(f"Updated text element {text_id}: '{original_text}' -> '{new_text}'")
+                
+                logger.info(f"Updated text element {text_id}: '{original_text}' -> '{new_text}'")
             else:
                 # Fallback: try to find element by text content
                 for i, element in enumerate(meaningful_elements):
@@ -685,37 +956,100 @@ def handle_message(data):
     # Start workflow in background thread
     def run_workflow():
         try:
-            # Check if this is an approval/rejection response
-            message_lower = message.lower().strip()
-            approval_keywords = ["approve", "yes", "proceed", "continue", "looks good", "ok", "accept"]
-            rejection_keywords = ["reject", "no", "redo", "regenerate", "change", "modify"]
-            
-            is_approval_response = any(keyword in message_lower for keyword in approval_keywords)
-            is_rejection_response = any(keyword in message_lower for keyword in rejection_keywords)
-            
-            # Get existing workflow state from session if this is an approval/rejection
+            # Get existing workflow state from session 
             existing_state = None
-            if (is_approval_response or is_rejection_response):
-                # Look for session by sid since that's how we store it
-                for sid, session_data in active_sessions.items():
-                    if session_data.get('session_id') == session_id:
-                        existing_state = session_data.get('workflow_state')
-                        logger.info(f"Found existing workflow state for session {session_id}")
-                        break
+            conversation_history = []
             
-            if existing_state:
-                # Continue existing workflow with approval/rejection
-                logger.info(f"Continuing existing workflow with {'approval' if is_approval_response else 'rejection'}")
-                logger.info(f"Existing state keys: {list(existing_state.keys())}")
-                logger.info(f"Outline generated: {existing_state.get('is_outline_generated')}, approved: {existing_state.get('is_outline_approved')}")
+            # Look for session by sid to get both state and conversation history
+            for sid, session_data in active_sessions.items():
+                if session_data.get('session_id') == session_id:
+                    existing_state = session_data.get('workflow_state')
+                    # Build conversation history from workflow state messages if available
+                    if existing_state and 'messages' in existing_state:
+                        for msg in existing_state['messages']:
+                            if hasattr(msg, 'content'):
+                                conversation_history.append({
+                                    'type': msg.__class__.__name__, 
+                                    'content': msg.content[:200] + "..." if len(msg.content) > 200 else msg.content,
+                                    'name': getattr(msg, 'name', 'unknown')
+                                })
+                    break
+            
+            # Use LLM to analyze the conversation context and determine workflow strategy
+            workflow_decision = analyze_conversation_context(message, existing_state, conversation_history)
+            
+            logger.info(f"LLM workflow decision: {workflow_decision}")
+            
+            if workflow_decision['strategy'] == 'continue_existing':
+                # Continue existing workflow
+                logger.info(f"Continuing existing workflow: {workflow_decision['reasoning']}")
+                
+                # Debug: Log existing state
+                if existing_state:
+                    logger.info(f"DEBUG: Existing state keys: {existing_state.keys()}")
+                    logger.info(f"DEBUG: is_outline_generated: {existing_state.get('is_outline_generated')}")
+                    logger.info(f"DEBUG: is_outline_approved: {existing_state.get('is_outline_approved')}")
+                    logger.info(f"DEBUG: structured_outline exists: {bool(existing_state.get('structured_outline'))}")
+                    logger.info(f"DEBUG: plan exists: {bool(existing_state.get('plan'))}")
+                else:
+                    logger.warning("DEBUG: existing_state is None!")
+                
                 initial_state = existing_state.copy()
-                # Add the new human message to the existing state
                 initial_state["messages"].append(HumanMessage(content=message))
+                
+                # Apply any LLM-suggested state modifications
+                if workflow_decision.get('state_modifications'):
+                    logger.info(f"DEBUG: Applying state modifications: {workflow_decision['state_modifications']}")
+                    initial_state.update(workflow_decision['state_modifications'])
+                    logger.info(f"Applied LLM state modifications: {workflow_decision['state_modifications'].keys()}")
+                    
+                # Debug: Log final initial state
+                logger.info(f"DEBUG: Final initial_state - is_outline_generated: {initial_state.get('is_outline_generated')}")
+                logger.info(f"DEBUG: Final initial_state - is_outline_approved: {initial_state.get('is_outline_approved')}")
+                logger.info(f"DEBUG: Final initial_state - plan exists: {bool(initial_state.get('plan'))}")
+                    
+            elif workflow_decision['strategy'] == 'modify_existing':
+                # Modify existing presentation
+                logger.info(f"Modifying existing presentation: {workflow_decision['reasoning']}")
+                initial_state = existing_state.copy()
+                
+                # LLM determines what to preserve and what to regenerate
+                preservation_strategy = workflow_decision.get('preservation_strategy', {})
+                logger.info(f"LLM preservation strategy: {preservation_strategy}")
+                
+                # Apply preservation strategy
+                if preservation_strategy.get('preserve_slide_count') and existing_state.get('structured_outline'):
+                    existing_outline = existing_state.get('structured_outline')
+                    if existing_outline and 'slides' in existing_outline:
+                        slide_count = len(existing_outline['slides'])
+                        initial_state['requested_slide_count'] = slide_count
+                        logger.info(f"LLM preserved slide count: {slide_count}")
+                
+                # Reset components as determined by LLM
+                reset_components = workflow_decision.get('reset_components', [])
+                for component in reset_components:
+                    if component == 'outline':
+                        initial_state.update({
+                            "is_outline_generated": False,
+                            "is_outline_approved": False,
+                            "structured_outline": None,
+                            "outline_content": ""
+                        })
+                    elif component == 'slides':
+                        initial_state["slides"] = []
+                    elif component == 'layout':
+                        initial_state["layout_instructions"] = ""
+                
+                initial_state.update({
+                    "original_user_request": f"{message} (modification of existing presentation)",
+                    "outline_attempts": 0
+                })
+                initial_state["messages"].append(HumanMessage(content=message))
+                logger.info(f"Reset components as determined by LLM: {reset_components}")
+                
             else:
-                # Create new initial state for workflow
-                logger.info("Starting new workflow - no existing state found")
-                if is_approval_response or is_rejection_response:
-                    logger.warning("This looks like an approval/rejection but no existing state was found!")
+                # Create new workflow
+                logger.info(f"Starting new workflow: {workflow_decision['reasoning']}")
                 
                 # Create Langfuse trace for new workflow
                 trace = create_workflow_trace(session_id, message)
@@ -725,6 +1059,8 @@ def handle_message(data):
                     "messages": [HumanMessage(content=message)],
                     "is_outline_generated": False,
                     "is_outline_approved": False,
+                    "structured_outline": None,
+                    "original_user_request": message,
                     "images": [],
                     "found_information": [],
                     "slides": [],
@@ -738,8 +1074,8 @@ def handle_message(data):
                     # Emit slide immediately when generated
                     socketio.emit('slide_generated', data, room=client_sid)
                 elif update_type == 'agent_update':
-                    # Emit agent status updates
-                    socketio.emit('agent_status', data, room=client_sid)
+                    # Skip agent status updates to reduce chat noise
+                    pass
                 elif update_type == 'workflow_complete':
                     # Emit completion status
                     socketio.emit('workflow_complete', data, room=client_sid)
@@ -757,11 +1093,16 @@ def handle_message(data):
                     socketio.emit('agent_tool_call', data, room=client_sid)
                 elif update_type == 'supervisor_message':
                     # Emit supervisor messages (like approval requests)
-                    socketio.emit('chat_message', {
-                        'type': 'assistant',
-                        'message': data.get('message', ''),
-                        'timestamp': datetime.now().isoformat()
-                    }, room=client_sid)
+                    message_content = data.get('message', '')
+                    # Only show outline approval requests, hide all other supervisor messages
+                    if ('approve' in message_content and 'reject' in message_content):
+                        message_type = 'supervisor'  # This will trigger the approval interface
+                        socketio.emit('chat_message', {
+                            'type': message_type,
+                            'message': message_content,
+                            'timestamp': datetime.now().isoformat()
+                        }, room=client_sid)
+                    # Skip all other supervisor messages (reasoning, routing, etc.)
             
             # Set the streaming callback for the workflow
             set_streaming_callback(stream_callback)
@@ -785,7 +1126,8 @@ def handle_message(data):
                         "workflow_completed": True,
                         "slides_generated": len(result.get('slides', [])),
                         "outline_generated": result.get('is_outline_generated', False),
-                        "outline_approved": result.get('is_outline_approved', False)
+                        "outline_approved": result.get('is_outline_approved', False),
+                        "llm_decision": workflow_decision
                     }
                 )
                 logger.info(f"Completed Langfuse workflow trace for session {session_id}")
@@ -872,7 +1214,7 @@ def run_workflow_with_streaming(initial_state, callback, session_id):
                 # Update state with supervisor decision
                 if hasattr(command, 'update'):
                     state.update(command.update)
-                    
+                
                     # Check if supervisor added a message (like approval request)
                     if 'messages' in command.update:
                         new_messages = command.update['messages']
@@ -880,12 +1222,6 @@ def run_workflow_with_streaming(initial_state, callback, session_id):
                             if hasattr(msg, 'name') and msg.name == 'supervisor':
                                 # This is a supervisor message, emit it
                                 callback('supervisor_message', {'message': msg.content})
-                
-                callback('agent_update', {
-                    'agent': 'supervisor',
-                    'status': f'Routing to {next_node}',
-                    'iteration': iteration
-                })
                 
                 current_node = next_node
                 
@@ -896,11 +1232,12 @@ def run_workflow_with_streaming(initial_state, callback, session_id):
                 if hasattr(command, 'update'):
                     state.update(command.update)
                 
-                callback('agent_update', {
-                    'agent': 'planner',
-                    'status': 'Planning completed - workflow plan created',
-                    'plan_created': bool(state.get('plan'))
-                })
+                # Skip planner status messages
+                # callback('agent_update', {
+                #     'agent': 'planner',
+                #     'status': 'Planning completed - workflow plan created',
+                #     'plan_created': bool(state.get('plan'))
+                # })
                 
                 current_node = "supervisor"
                 
@@ -918,11 +1255,12 @@ def run_workflow_with_streaming(initial_state, callback, session_id):
                         logger.info(f"Saved workflow state after outline generation to session {session_id}")
                         break
                 
-                callback('agent_update', {
-                    'agent': 'outline_agent',
-                    'status': 'Outline generation completed',
-                    'outline_generated': state.get('is_outline_generated', False)
-                })
+                # Skip outline agent status messages
+                # callback('agent_update', {
+                #     'agent': 'outline_agent',
+                #     'status': 'Outline generation completed',
+                #     'outline_generated': state.get('is_outline_generated', False)
+                # })
                 
                 current_node = "supervisor"
                 
@@ -933,11 +1271,12 @@ def run_workflow_with_streaming(initial_state, callback, session_id):
                 if hasattr(command, 'update'):
                     state.update(command.update)
                 
-                callback('agent_update', {
-                    'agent': 'artist_agent',
-                    'status': 'Layout design completed',
-                    'layout_created': bool(state.get('layout_instructions'))
-                })
+                # Skip artist agent status messages
+                # callback('agent_update', {
+                #     'agent': 'artist_agent',
+                #     'status': 'Layout design completed',
+                #     'layout_created': bool(state.get('layout_instructions'))
+                # })
                 
                 current_node = "supervisor"
                 
@@ -949,13 +1288,14 @@ def run_workflow_with_streaming(initial_state, callback, session_id):
                 if hasattr(command, 'update'):
                     state.update(command.update)
                 
-                callback('agent_update', {
-                    'agent': 'slide_agent',
-                    'status': f'Generated {len(state.get("slides", []))} slides'
-                })
+                # Skip slide agent status messages
+                # callback('agent_update', {
+                #     'agent': 'slide_agent',
+                #     'status': f'Generated {len(state.get("slides", []))} slides'
+                # })
                 
                 current_node = "supervisor"
-            
+                
             else:
                 logger.warning(f"Unknown node: {current_node}")
                 if node_span:
@@ -995,7 +1335,7 @@ def run_workflow_with_streaming(initial_state, callback, session_id):
             "total_iterations": iteration,
             "slides_generated": len(state.get('slides', [])),
             "workflow_completed": current_node == "FINISH"
-        })
+    })
     
     return state
 
@@ -1007,6 +1347,14 @@ def slide_agent_node_with_streaming(state, callback, session_id):
     import re
     
     logger.info("Slide agent with streaming: Starting slide generation")
+    
+    # Pass user's original request to let slide generation tools analyze design requirements
+    user_design_context = ""
+    original_request = state.get("original_user_request", "")
+    if original_request:
+        user_design_context = f"User's original request: '{original_request}'"
+    
+    logger.info(f"Streaming slide agent user design context: {user_design_context}")
     
     # Get the outline content from state (preferred) or messages (fallback)
     actual_outline_str = state.get("outline_content", "")
@@ -1103,13 +1451,31 @@ def slide_agent_node_with_streaming(state, callback, session_id):
                 time.sleep(3)  # 3 second delay between slides
             
             # Prepare slide generation data
+            instructions_text = f"Create slide {i} with content: {slide_content}"
+            if user_design_context:
+                instructions_text += f". {user_design_context}. Analyze the user's request and apply appropriate design elements."
+            instructions_text += f". Use relevant research: {found_info[:2]}"
+            
+            # Include the full outline content so AI can see suggested images and context
+            if actual_outline_str and len(actual_outline_str.strip()) > 50:
+                instructions_text += f"\n\nFull presentation outline with image suggestions:\n{actual_outline_str}"
+            
             slide_data = {
                 "slide_number": i,
-                "instructions": f"Create slide {i} with content: {slide_content}. Use relevant research: {found_info[:2]}",
+                "instructions": instructions_text,
                 "images_urls": json.dumps([img for img in images[:2]]) if images else "[]",
                 "style": "modern, professional presentation style with clean layout",
                 "content": slide_content
             }
+            
+            logger.info(f"=== Calling generate_slide tool (streaming) ===")
+            logger.info(f"Tool parameters:")
+            logger.info(f"  - slide_number: {i}")
+            logger.info(f"  - style: {slide_data['style']}")
+            logger.info(f"  - content: {slide_data['content']}")
+            logger.info(f"  - images_urls: {slide_data['images_urls']}")
+            logger.info(f"  - instructions length: {len(instructions_text)} characters")
+            logger.info(f"  - instructions preview: {instructions_text[:200]}...")
             
             # Generate the slide
             slide_result = generate_slide.invoke(slide_data)
@@ -1171,6 +1537,191 @@ def slide_agent_node_with_streaming(state, callback, session_id):
         },
         'goto': "supervisor"
     })()
+
+def analyze_conversation_context(current_message: str, existing_state: dict, conversation_history: list) -> dict:
+    """
+    Use LLM to analyze conversation context and determine workflow strategy with fallback models
+    """
+    
+    # Build context summary
+    context_summary = "No previous context"
+    if existing_state:
+        context_parts = []
+        if existing_state.get('is_outline_generated'):
+            outline_info = "Outline generated"
+            if existing_state.get('structured_outline', {}).get('slides'):
+                slide_count = len(existing_state['structured_outline']['slides'])
+                outline_info += f" ({slide_count} slides)"
+            context_parts.append(outline_info)
+        
+        if existing_state.get('is_outline_approved'):
+            context_parts.append("Outline approved")
+        
+        if existing_state.get('layout_instructions'):
+            context_parts.append("Layout created")
+            
+        if existing_state.get('slides'):
+            slides_count = len(existing_state['slides'])
+            context_parts.append(f"Slides generated ({slides_count} slides)")
+        
+        context_summary = ", ".join(context_parts) if context_parts else "Session started"
+    
+    # Build conversation history summary (limit to avoid token issues)
+    history_summary = "No conversation history"
+    if conversation_history:
+        history_parts = []
+        for msg in conversation_history[-3:]:  # Reduced to last 3 messages to save tokens
+            msg_type = msg['type'].replace('Message', '').lower()
+            name = msg.get('name', 'unknown')
+            content = msg['content'][:50] + "..." if len(msg['content']) > 50 else msg['content']  # Reduced content length
+            history_parts.append(f"{msg_type}({name}): {content}")
+        history_summary = "\n".join(history_parts)
+    
+    # Create concise analysis prompt for LLM
+    analysis_prompt = f"""Analyze conversation context and determine workflow strategy.
+
+USER MESSAGE: "{current_message}"
+STATE: {context_summary}
+HISTORY: {history_summary}
+
+STRATEGIES:
+- "new_workflow": Start new presentation
+- "continue_existing": Continue current workflow (approvals, rejections)
+- "modify_existing": Modify existing presentation
+
+RESPOND WITH JSON:
+{{
+    "strategy": "new_workflow|continue_existing|modify_existing",
+    "reasoning": "Brief explanation",
+    "preservation_strategy": {{"preserve_slide_count": boolean}},
+    "reset_components": ["outline", "slides", "layout"],
+    "state_modifications": {{"key": "value"}}
+}}
+
+IMPORTANT FIELD NAMES FOR state_modifications:
+- To approve outline: "is_outline_approved": true
+- To mark outline generated: "is_outline_generated": true  
+- To reset outline: "is_outline_generated": false, "is_outline_approved": false
+
+DETECT:
+- Approval: yes, approve, ok, good, proceed (any language) → set "is_outline_approved": true
+- Rejection: no, reject, redo, change (any language) → reset outline generation
+- Modification: edit, modify, change, sửa lại, thay đổi"""
+
+    # Define fallback models in order of preference
+    analysis_fallbacks = [
+        ("Claude", LLM_CLAUDE),
+        ("Gemini", LLM_GEMINI),
+        ("Gemini Flash", LLM_GEMINI_FLASH),
+        ("GPT-o3", LLM_GPT_O3)
+    ]
+    
+    # Try each LLM in fallback order
+    for model_name, llm_model in analysis_fallbacks:
+        try:
+            logger.info(f"Trying {model_name} for conversation analysis")
+            
+            response = llm_model.invoke(analysis_prompt)
+            response_content = response.content if hasattr(response, 'content') else str(response)
+            
+            # Parse JSON response
+            import json
+            import re
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
+            if json_match:
+                decision = json.loads(json_match.group())
+                
+                # Validate and provide defaults
+                valid_strategies = ["new_workflow", "continue_existing", "modify_existing"]
+                if decision.get("strategy") not in valid_strategies:
+                    decision["strategy"] = "new_workflow"
+                
+                # Ensure required fields exist
+                decision.setdefault("reasoning", "No reasoning provided")
+                decision.setdefault("preservation_strategy", {})
+                decision.setdefault("reset_components", [])
+                decision.setdefault("state_modifications", {})
+                
+                logger.info(f"✅ {model_name} conversation analysis successful: {decision['strategy']} - {decision['reasoning']}")
+                return decision
+            else:
+                logger.warning(f"{model_name} could not parse JSON from response")
+                
+        except Exception as e:
+            error_msg = str(e)
+            logger.warning(f"{model_name} failed for conversation analysis: {error_msg}")
+            
+            # Check if it's a token limit error
+            if "maximum tokens" in error_msg.lower() or "token limit" in error_msg.lower() or "131072" in error_msg:
+                logger.info(f"{model_name} hit token limit, trying next model")
+                continue
+            else:
+                logger.warning(f"{model_name} failed with non-token error: {error_msg}")
+                continue
+    
+    # All LLMs failed, use enhanced fallback logic
+    logger.warning("All LLM models failed for conversation analysis, using enhanced fallback logic")
+    
+    # Enhanced fallback logic with better approval detection
+    current_message_lower = current_message.lower().strip()
+    
+    # Check for approval keywords in multiple languages
+    approval_keywords = [
+        "approve", "yes", "ok", "good", "proceed", "continue", "accept",
+        "đồng ý", "chấp nhận", "tiếp tục", "được", "ok", "yes"
+    ]
+    rejection_keywords = [
+        "reject", "no", "redo", "regenerate", "change", "modify", "không",
+        "từ chối", "làm lại", "thay đổi", "sửa lại"
+    ]
+    
+    is_approval = any(keyword in current_message_lower for keyword in approval_keywords)
+    is_rejection = any(keyword in current_message_lower for keyword in rejection_keywords)
+    
+    if not existing_state:
+        return {
+            "strategy": "new_workflow",
+            "reasoning": "No existing state - starting new workflow",
+            "preservation_strategy": {},
+            "reset_components": [],
+            "state_modifications": {}
+        }
+    elif existing_state.get('is_outline_generated') and not existing_state.get('is_outline_approved'):
+        if is_approval:
+            return {
+                "strategy": "continue_existing",
+                "reasoning": "User approved outline - continuing to next step",
+                "preservation_strategy": {},
+                "reset_components": [],
+                "state_modifications": {"is_outline_approved": True}
+            }
+        elif is_rejection:
+            return {
+                "strategy": "continue_existing",
+                "reasoning": "User rejected outline - regenerating",
+                "preservation_strategy": {},
+                "reset_components": ["outline"],
+                "state_modifications": {"is_outline_generated": False, "is_outline_approved": False}
+            }
+        else:
+            return {
+                "strategy": "continue_existing", 
+                "reasoning": "Outline awaiting approval - continuing existing workflow",
+                "preservation_strategy": {},
+                "reset_components": [],
+                "state_modifications": {}
+            }
+    else:
+        # Default to modification if there's existing state
+        return {
+            "strategy": "modify_existing",
+            "reasoning": "Existing state found - treating as modification request",
+            "preservation_strategy": {"preserve_slide_count": True},
+            "reset_components": ["outline", "slides"],
+            "state_modifications": {}
+        }
 
 if __name__ == '__main__':
     # Disable auto-reloader to avoid Windows socket issues
