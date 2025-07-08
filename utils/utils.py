@@ -36,7 +36,7 @@ def get_research_topic(messages: List[AnyMessage], original_request: str = None)
     # If still no clean message, look for any HumanMessage
         for message in messages:
             if isinstance(message, HumanMessage):
-            return message.content
+                return message.content
     
     # Fallback: if no HumanMessage found, use the last message
     if messages:

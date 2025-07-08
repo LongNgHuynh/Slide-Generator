@@ -149,7 +149,7 @@ structured_outline_agent = LLM_4o.with_structured_output(StructuredOutline)
 structured_artist_agent = LLM_4o.with_structured_output(LayoutInstructions)
 
 slide_agent = create_react_agent(
-    model=LLM,  # Use GPT-4o for better ReAct agent compatibility and reliability
+    model=LLM_4o,
     tools=[generate_slide, generate_cover_slide], # generate_slide tool is now globally defined
     prompt=prompt_system_slide
 )
