@@ -1,0 +1,52 @@
+{
+  "summary": {
+    "total_tools": 4,
+    "built_in_tools": 4,
+    "mcp_tools": 0,
+    "mcp_servers_running": 0,
+    "mcp_servers_configured": 0
+  },
+  "tools": {
+    "image_search": {
+      "name": "image_search",
+      "description": "Search for relevant images",
+      "type": "built-in",
+      "status": "active",
+      "provider": "Internal search system"
+    },
+    "web_search": {
+      "name": "web_search",
+      "description": "Search the web for information",
+      "type": "built-in",
+      "status": "active",
+      "provider": "SearXNG"
+    },
+    "crawl_url": {
+      "name": "crawl_url",
+      "description": "Extract content from URLs",
+      "type": "built-in",
+      "status": "active",
+      "provider": "Internal crawler"
+    },
+    "generate_slide": {
+      "name": "generate_slide",
+      "description": "Generate presentation slides",
+      "type": "built-in",
+      "status": "active",
+      "provider": "Internal slide generator"
+    }
+  },
+  "mcp_status": {
+    "servers_discovered": 0,
+    "servers_running": 0,
+    "tools_available": 0,
+    "servers": {}
+  },
+  "recommendations": [
+    "\ud83d\udca1 Install Node.js to enable MCP servers (filesystem, everything)",
+    "\ud83d\udd11 Set GITHUB_PERSONAL_ACCESS_TOKEN for GitHub integration",
+    "\ud83c\udf10 Set FIRECRAWL_API_KEY for advanced web scraping",
+    "\ud83d\udd11 Add GITHUB_PERSONAL_ACCESS_TOKEN for GitHub tools",
+    "\ud83c\udf10 Add FIRECRAWL_API_KEY for enhanced web scraping"
+  ]
+}

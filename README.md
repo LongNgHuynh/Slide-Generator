@@ -1,14 +1,15 @@
 # Presentation Slide Generator
 
-An AI-powered web application that automatically generates professional presentation slides based on your topic.
+An AI-powered application that automatically generates professional presentation slides using advanced language models and AI technologies.
 
 ## Features
 
 - Generate complete presentations with just a text prompt
-- AI researches your topic, finds images, and creates slides
-- View slides in the browser
-- Responsive web interface
-- Automatic slide summaries with visual enhancement suggestions
+- AI-powered content generation using multiple LLM providers
+- Advanced workflow orchestration with LangGraph
+- Support for multiple AI providers (OpenAI, Anthropic, Google)
+- Comprehensive logging and monitoring with Langfuse
+- AWS integration capabilities
 
 ## Setup Instructions
 
@@ -18,68 +19,87 @@ An AI-powered web application that automatically generates professional presenta
    cd slide-generator
    ```
 
-2. Create and activate a virtual environment:
+2. Install uv (recommended package installer):
    ```
-   python -m venv venv
-   # On Windows
-   venv\Scripts\activate
+   # On Windows (PowerShell)
+   (Invoke-WebRequest -Uri https://astral.sh/uv/install.ps1 -UseBasicParsing).Content | pwsh -Command -
+   
    # On macOS/Linux
-   source venv/bin/activate
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-3. Install dependencies:
+3. Create and activate a virtual environment using uv:
    ```
-   pip install -r requirements.txt
+   uv venv --python=3.11
+   # On Windows
+   .venv\Scripts\activate
+   # On macOS/Linux
+   source .venv/bin/activate
    ```
 
-4. Set up environment variables:
+4. Install dependencies using uv:
+   ```
+   uv pip install -e .
+   ```
+
+5. Set up environment variables:
    Create a `.env` file in the project root with your API keys:
    ```
    OPENAI_API_KEY=your_openai_api_key
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+   GOOGLE_API_KEY=your_google_api_key
+   LANGCHAIN_API_KEY=your_langsmith_api_key
+   LANGCHAIN_PROJECT=slide-generator
    ```
 
-5. Make sure you have the required directories:
+## Development
+
+To start the LangGraph development server and view your workflows in LangSmith:
+
+1. Make sure you have set up your LangSmith API key in the `.env` file
+2. Run the development server:
    ```
-   mkdir -p generated_slides
+   langgraph dev
    ```
 
-## Running the Application
-
-1. Start the Flask server:
-   ```
-   python app.py
-   ```
-
-2. Open your browser and navigate to:
-   ```
-   http://localhost:5000
-   ```
-
-3. Enter a topic for your presentation and click "Generate Presentation"
+3. You can now view and debug your workflows in the LangSmith interface
 
 ## Project Structure
 
-- `app.py` - Flask web application
-- `new_workflow.py` - Core presentation generation logic using LangGraph
-- `templates/` - HTML templates for the web interface
+  - `workflows/` - LangGraph workflow definitions
+  - `models/` - LLM model configurations and integrations
+  - `utils/` - Utility functions and tools
 - `generated_slides/` - Directory where generated slides are stored
-- `utils/` - Utility functions and tools
-- `models/` - LLM model configurations
 
-## Usage
+## Dependencies
 
-1. Enter a topic or specific instructions for your presentation
-2. Wait for the AI to generate your slides (this may take a few minutes)
-3. View and navigate through the generated slides in the browser
-4. Open individual slides in a new tab for full-screen viewing
+The project uses several key dependencies:
+- LangChain and LangGraph for workflow orchestration
+- Multiple LLM providers (OpenAI, Anthropic, Google)
+- Langfuse for monitoring and logging
+- BeautifulSoup4 for web scraping
 
 ## Requirements
 
-- Python 3.9+
-- OpenAI API key
-- Internet connection (for web search and image retrieval)
+- Python 3.11 or higher
+- API keys for your chosen LLM providers
+- Internet connection for web scraping and API access
 
-## License
+## Running the Web Application
 
-MIT License
+To use the real-time web interface for generating and viewing slides:
+
+1. **Install dependencies** (if you haven't already):
+
+2. **Set up your environment variables** in a `.env` file (see above for required keys).
+
+3. **Start the Flask web app**:
+   ```bash
+   python app.py
+   ```
+
+4. **Open your browser** and go to [http://localhost:5000](http://localhost:5000)
+
+- Use the chat panel to request a presentation (e.g., "Create a presentation about AI in education").
+- Slides will appear in real-time on the right as they are generated.
 

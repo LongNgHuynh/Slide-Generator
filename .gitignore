@@ -161,11 +161,17 @@ dmypy.json
 #images
 /data
 
-# HTML generate files
-*.html
+*.txt
+/images
 
-#json output files
-*.json
+.langgraph_api/
+
+# generated files
+generated_slides/
+
+
+
+/semi_output
 
 # Pyre type checker
 .pyre/
