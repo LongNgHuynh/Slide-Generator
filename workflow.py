@@ -138,7 +138,9 @@ class Router(TypedDict):
 
 outline_agent = create_react_agent(
     model=LLM,  # Use GPT-4o for better ReAct agent compatibility and reliability
-    tools=[image_search, crawl_url, web_search],
+    # remove image search from tools for now
+    # tools=[image_search, crawl_url, web_search],
+    tools=[crawl_url, web_search],
     prompt=prompt_system_outline,
 )
 
