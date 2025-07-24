@@ -19,6 +19,17 @@ from utils.pdf_export import (
     export_slides_to_pdf,
     get_all_slides_in_directory
 )
+from utils.pptx_export import (
+    convert_pdf_to_pptx,
+    convert_single_slide_to_pptx,
+    convert_multiple_slides_to_pptx,
+    get_pptx_export_info,
+    is_convertapi_available
+)
+import convertapi
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Initialize all LLM models for fallback
 LLM_CLAUDE = Claude_3_7_Sonnet()
@@ -53,6 +64,238 @@ slide_queues = {}
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/convert_to_pptx', methods=['GET', 'POST'])
+def convert_to_pptx():
+    """Convert a PDF file to PowerPoint presentation (flexible endpoint)"""
+    try:
+        # Handle both GET (with query params) and POST (with JSON body)
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            pdf_file_path = data.get('pdf_file_path')
+            output_filename = data.get('output_filename', 'converted_presentation')
+        else:
+            pdf_file_path = request.args.get('pdf_file_path')
+            output_filename = request.args.get('output_filename', 'converted_presentation')
+        
+        if not pdf_file_path:
+            return jsonify({
+                "success": False,
+                "error": "PDF file path is required. Use 'pdf_file_path' parameter."
+            }), 400
+        
+        # Check if PDF file exists
+        if not os.path.exists(pdf_file_path):
+            return jsonify({
+                "success": False,
+                "error": f"PDF file not found: {pdf_file_path}"
+            }), 404
+        
+        # Create exports directory
+        exports_dir = os.path.join(os.getcwd(), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"{output_filename}_{timestamp}"
+        
+        # Use utility function to convert PDF to PPTX
+        success, pptx_path, error = convert_pdf_to_pptx(pdf_file_path, exports_dir, base_filename)
+        
+        if not success:
+            return jsonify({
+                "success": False,
+                "error": error
+            }), 500
+        
+        if os.path.exists(pptx_path):
+            logger.info(f"Successfully converted PDF to PPTX: {pptx_path}")
+            return send_file(
+                pptx_path,
+                as_attachment=True,
+                download_name=f"{base_filename}.pptx",
+                mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            )
+        else:
+            return jsonify({
+                "success": False,
+                "error": "PPTX conversion completed but file not found"
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error in convert_to_pptx: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/convert_single_slide_to_pptx/<int:slide_number>')
+def convert_single_slide_to_pptx_endpoint(slide_number):
+    """Convert a single HTML slide to PPTX via PDF"""
+    try:
+        logger.info(f"PPTX conversion request for slide {slide_number}")
+        
+        # Find the slide file
+        slide_file = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_number:03d}.html")
+        
+        if not os.path.exists(slide_file):
+            return jsonify({
+                "success": False,
+                "error": f"Slide {slide_number} not found"
+            }), 404
+        
+        # Create exports directory
+        exports_dir = os.path.join(os.getcwd(), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        
+        # Use utility function to convert slide to PPTX
+        success, pptx_path, error = convert_single_slide_to_pptx(slide_file, exports_dir, slide_number)
+        
+        if not success:
+            return jsonify({
+                "success": False,
+                "error": error
+            }), 500
+        
+        if os.path.exists(pptx_path):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"slide_{slide_number:03d}_{timestamp}.pptx"
+            
+            logger.info(f"Successfully converted slide {slide_number} to PPTX")
+            return send_file(
+                pptx_path,
+                as_attachment=True,
+                download_name=output_filename,
+                mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            )
+        else:
+            return jsonify({
+                "success": False,
+                "error": "PPTX conversion failed - output file not found"
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error converting slide {slide_number} to PPTX: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/convert_all_slides_to_pptx')
+def convert_all_slides_to_pptx():
+    """Convert all HTML slides to a single PPTX presentation via PDF"""
+    try:
+        logger.info("PPTX conversion request for all slides")
+        
+        # Get all slides in the directory
+        slide_files = get_all_slides_in_directory(GENERATED_SLIDES_DIR)
+        
+        if not slide_files:
+            return jsonify({
+                "success": False,
+                "error": "No slides found to convert"
+            }), 404
+        
+        logger.info(f"Found {len(slide_files)} slides to convert to PPTX")
+        
+        # Create exports directory
+        exports_dir = os.path.join(os.getcwd(), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"presentation_{timestamp}"
+        
+        # Use utility function to convert all slides to combined PPTX
+        success, pptx_path, error = convert_multiple_slides_to_pptx(
+            slide_files, exports_dir, base_filename, combine=True
+        )
+        
+        if not success:
+            return jsonify({
+                "success": False,
+                "error": error
+            }), 500
+        
+        if os.path.exists(pptx_path):
+            output_filename = f"presentation_{timestamp}.pptx"
+            logger.info(f"Successfully converted {len(slide_files)} slides to PPTX")
+            return send_file(
+                pptx_path,
+                as_attachment=True,
+                download_name=output_filename,
+                mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            )
+        else:
+            return jsonify({
+                "success": False,
+                "error": "PPTX conversion failed - output file not found"
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error converting all slides to PPTX: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+
+@app.route('/convert_individual_slides_to_pptx')
+def convert_individual_slides_to_pptx():
+    """Convert all slides to individual PPTX files and return as ZIP"""
+    try:
+        logger.info("PPTX conversion request for individual slides")
+        
+        # Get all slides in the directory
+        slide_files = get_all_slides_in_directory(GENERATED_SLIDES_DIR)
+        
+        if not slide_files:
+            return jsonify({
+                "success": False,
+                "error": "No slides found to convert"
+            }), 404
+        
+        logger.info(f"Found {len(slide_files)} slides to convert to individual PPTX files")
+        
+        # Create exports directory
+        exports_dir = os.path.join(os.getcwd(), "exports")
+        os.makedirs(exports_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"slides_individual_pptx_{timestamp}"
+        
+        # Use utility function to convert slides to individual PPTX files
+        success, zip_path, error = convert_multiple_slides_to_pptx(
+            slide_files, exports_dir, base_filename, combine=False
+        )
+        
+        if not success:
+            return jsonify({
+                "success": False,
+                "error": error
+            }), 500
+        
+        if os.path.exists(zip_path):
+            zip_filename = os.path.basename(zip_path)
+            logger.info(f"Successfully created ZIP with individual PPTX files")
+            
+            return send_file(
+                zip_path,
+                as_attachment=True,
+                download_name=zip_filename,
+                mimetype='application/zip'
+            )
+        else:
+            return jsonify({
+                "success": False,
+                "error": "PPTX conversion failed - ZIP file not found"
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error converting individual slides to PPTX: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 @app.route('/export_pdf/<int:slide_number>')
 def export_single_slide_pdf(slide_number):
@@ -217,65 +460,7 @@ def export_individual_slides_pdf():
             "error": str(e)
         }), 500
 
-@app.route('/export_selected_slides_pdf', methods=['POST'])
-def export_selected_slides_pdf():
-    """Export selected slides to a combined PDF"""
-    try:
-        logger.info("Export selected slides to PDF request received")
-        
-        data = request.get_json()
-        slide_numbers = data.get('slide_numbers', [])
-        
-        if not slide_numbers:
-            return jsonify({
-                "success": False,
-                "error": "No slide numbers provided"
-            }), 400
-        
-        # Get selected slide files
-        slide_files = []
-        for slide_num in slide_numbers:
-            slide_file = os.path.join(GENERATED_SLIDES_DIR, f"slide_{slide_num:03d}.html")
-            if os.path.exists(slide_file):
-                slide_files.append(slide_file)
-        
-        if not slide_files:
-            return jsonify({
-                "success": False,
-                "error": "None of the selected slides were found"
-            }), 404
-        
-        # Create output path in exports directory
-        exports_dir = os.path.join(os.getcwd(), "exports")
-        os.makedirs(exports_dir, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        slides_str = "_".join(map(str, sorted(slide_numbers)))
-        output_filename = f"selected_slides_{slides_str}_{timestamp}.pdf"
-        output_path = os.path.join(exports_dir, output_filename)
-        
-        # Export using our utility
-        result = export_slides_to_pdf(slide_files, output_path, method="auto", combine=True)
-        
-        if result["success"]:
-            return send_file(
-                output_path,
-                as_attachment=True,
-                download_name=output_filename,
-                mimetype='application/pdf'
-            )
-        else:
-            return jsonify({
-                "success": False,
-                "error": result["error"]
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"Error in export_selected_slides_pdf: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+
 
 @app.route('/api/slides/available')
 def get_available_slides():
@@ -1595,18 +1780,28 @@ RESPOND WITH JSON:
     "reasoning": "Brief explanation",
     "preservation_strategy": {{"preserve_slide_count": boolean}},
     "reset_components": ["outline", "slides", "layout"],
-    "state_modifications": {{"key": "value"}}
+    "state_modifications": {{"key": "value"}},
+    "edited_outline_content": "extracted_outline_text_if_present"
 }}
 
 IMPORTANT FIELD NAMES FOR state_modifications:
 - To approve outline: "is_outline_approved": true
 - To mark outline generated: "is_outline_generated": true  
 - To reset outline: "is_outline_generated": false, "is_outline_approved": false
+- For edited outline: "outline_content": "new_outline_text", "is_outline_approved": true
 
 DETECT:
 - Approval: yes, approve, ok, good, proceed (any language) → set "is_outline_approved": true
 - Rejection: no, reject, redo, change (any language) → reset outline generation
-- Modification: edit, modify, change, sửa lại, thay đổi"""
+- Modification: edit, modify, change, sửa lại, thay đổi
+- Edited Outline: "EDITED_OUTLINE:" prefix → extract content and approve outline
+
+EDITED OUTLINE HANDLING:
+If message starts with "EDITED_OUTLINE:", extract the outline content that follows and set:
+- "strategy": "continue_existing"
+- "is_outline_approved": true
+- "outline_content": extracted_outline_text
+- "edited_outline_content": extracted_outline_text"""
 
     # Define fallback models in order of preference
     analysis_fallbacks = [
@@ -1667,6 +1862,28 @@ DETECT:
     # Enhanced fallback logic with better approval detection
     current_message_lower = current_message.lower().strip()
     
+    # Check for edited outline first
+    if current_message.startswith("EDITED_OUTLINE:"):
+        logger.info("Detected edited outline in message")
+        # Extract outline content after the prefix
+        edited_content = current_message[len("EDITED_OUTLINE:"):].strip()
+        
+        if edited_content:
+            logger.info(f"Extracted edited outline content: {len(edited_content)} characters")
+            return {
+                "strategy": "continue_existing",
+                "reasoning": "User provided edited outline - continuing with edited content",
+                "preservation_strategy": {},
+                "reset_components": [],
+                "state_modifications": {
+                    "is_outline_approved": True,
+                    "outline_content": edited_content
+                },
+                "edited_outline_content": edited_content
+            }
+        else:
+            logger.warning("Empty edited outline content detected")
+    
     # Check for approval keywords in multiple languages
     approval_keywords = [
         "approve", "yes", "ok", "good", "proceed", "continue", "accept",
@@ -1722,6 +1939,62 @@ DETECT:
             "reset_components": ["outline", "slides"],
             "state_modifications": {}
         }
+
+# Helper function is now provided by utils.pptx_export module
+# Use convert_pdf_to_pptx from utils.pptx_export instead
+
+@app.route('/api/conversion/options')
+def get_conversion_options():
+    """Get available conversion options and status"""
+    try:
+        # Get available slides
+        slide_files = get_all_slides_in_directory(GENERATED_SLIDES_DIR)
+        slide_count = len(slide_files)
+        
+        # Get available slides info
+        slides_info = []
+        for slide_file in slide_files:
+            filename = os.path.basename(slide_file)
+            slide_number = int(filename.split('_')[1].split('.')[0])
+            slides_info.append({
+                "slide_number": slide_number,
+                "filename": filename
+            })
+        
+        # Get PPTX export info from utility
+        pptx_info = get_pptx_export_info()
+        
+        return jsonify({
+            "success": True,
+            "conversion_options": {
+                "pdf_export": {
+                    "available": True,
+                    "formats": ["single_slide", "all_slides"]
+                },
+                "pptx_export": {
+                    "available": pptx_info["available"],
+                    "formats": ["single_slide", "all_slides"] if pptx_info["available"] else [],
+                    "note": "Requires ConvertAPI key" if not pptx_info["available"] else "Ready to use",
+                    "requirements": pptx_info["requirements"]
+                }
+            },
+            "slides": {
+                "total": slide_count,
+                "available_slides": slides_info
+            },
+            "status": {
+                "convertapi_configured": pptx_info["api_key_configured"],
+                "convertapi_installed": pptx_info["convertapi_installed"],
+                "slides_available": slide_count > 0
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting conversion options: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 if __name__ == '__main__':
     # Disable auto-reloader to avoid Windows socket issues

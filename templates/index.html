@@ -5,1000 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Slide Generator</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #000000;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        .container {
-            display: flex;
-            height: 100vh;
-            gap: 10px;
-            padding: 10px;
-        }
-
-        .chat-panel {
-            flex: 1;
-            min-width: 400px;
-            max-width: 600px;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .slides-panel {
-            flex: 1.5;
-            min-width: 700px;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .panel-header {
-            background: #000000;
-            color: white;
-            padding: 20px;
-            text-align: center;
-            font-size: 18px;
-            font-weight: bold;
-            border-bottom: 2px solid #333333;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .present-slides-btn {
-            position: absolute;
-            right: 20px;
-            background: #000000;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .present-slides-btn:hover {
-            background: #333333;
-            transform: scale(1.05);
-        }
-
-        .present-slides-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .header-buttons {
-            position: absolute;
-            right: 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .export-btn {
-            background: #000000;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .export-btn:hover {
-            background: #333333;
-            transform: scale(1.05);
-        }
-
-        .export-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .export-btn.pdf {
-            background: #d32f2f;
-        }
-
-        .export-btn.pdf:hover {
-            background: #b71c1c;
-        }
-
-        .export-dropdown {
-            position: relative;
-            display: inline-block;
-        }
-
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            right: 0;
-            background-color: white;
-            min-width: 180px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            border-radius: 8px;
-            z-index: 1000;
-            border: 1px solid #ccc;
-        }
-
-        .dropdown-content.show {
-            display: block;
-        }
-
-        .dropdown-content a {
-            color: black;
-            padding: 12px 16px;
-            text-decoration: none;
-            display: block;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .dropdown-content a:hover {
-            background-color: #f1f1f1;
-        }
-
-        .dropdown-content a:first-child {
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
-        }
-
-        .dropdown-content a:last-child {
-            border-bottom-left-radius: 8px;
-            border-bottom-right-radius: 8px;
-        }
-
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background: #ffffff;
-        }
-
-        .message {
-            margin-bottom: 15px;
-            padding: 12px 18px;
-            border-radius: 18px;
-            max-width: 80%;
-            word-wrap: break-word;
-            animation: slideIn 0.3s ease-out;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .message.user {
-            background: #000000;
-            color: white;
-            margin-left: auto;
-            border-bottom-right-radius: 5px;
-        }
-
-        .message.assistant {
-            background: #f0f0f0;
-            color: #000000;
-            margin-right: auto;
-            border-bottom-left-radius: 5px;
-            border: 1px solid #cccccc;
-        }
-
-        .message.system {
-            background: #e0e0e0;
-            color: #000000;
-            text-align: center;
-            font-style: italic;
-            margin: 10px auto;
-            border: 1px solid #cccccc;
-        }
-
-        .chat-input {
-            display: flex;
-            padding: 20px;
-            gap: 10px;
-            background: white;
-            border-top: 1px solid #e0e0e0;
-        }
-
-        .chat-input input {
-            flex: 1;
-            padding: 12px 18px;
-            border: 2px solid #e0e0e0;
-            border-radius: 25px;
-            font-size: 16px;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .chat-input input:focus {
-            border-color: #000000;
-        }
-
-        .chat-input button {
-            padding: 12px 24px;
-            background: #000000;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: transform 0.2s;
-        }
-
-        .chat-input button:hover {
-            background: #333333;
-            transform: scale(1.05);
-        }
-
-        .chat-input button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .slides-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background: #ffffff;
-        }
-
-        .slide {
-            background: white;
-            border: 2px solid #000000;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            overflow: hidden;
-            animation: slideInSlide 0.5s ease-out;
-        }
-
-        @keyframes slideInSlide {
-            from {
-                opacity: 0;
-                transform: translateX(50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        .slide-header {
-            background: #000000;
-            color: white;
-            padding: 15px 20px;
-            font-weight: bold;
-            font-size: 16px;
-        }
-
-        .slide-content {
-            padding: 20px;
-            min-height: 200px;
-        }
-
-        .slide.error {
-            border-color: #f44336;
-        }
-
-        .slide.error .slide-header {
-            background: #333333;
-        }
-
-        .status-indicator {
-            padding: 10px 20px;
-            text-align: center;
-            background: #f0f0f0;
-            color: #000000;
-            font-weight: bold;
-            border-bottom: 2px solid #000000;
-        }
-
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #000000;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .slide-content iframe {
-            width: 100%;
-            height: 500px;
-            border: none;
-            border-radius: 8px;
-            transform-origin: 0 0;
-            overflow: hidden;
-        }
-
-        .iframe-container {
-            position: relative;
-            width: 100%;
-            height: 500px;
-            overflow: hidden;
-            border-radius: 8px;
-            background: #ffffff;
-            border: 1px solid #000000;
-        }
-
-        .iframe-loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 14px;
-            color: #000000;
-            z-index: 1;
-        }
-
-        .iframe-container iframe {
-            position: relative;
-            z-index: 2;
-        }
-
-        .agent-status {
-            padding: 8px 16px;
-            margin: 5px 0;
-            border-radius: 20px;
-            font-size: 14px;
-            text-align: center;
-        }
-
-        .agent-status.supervisor {
-            background: #f0f0f0;
-            color: #000000;
-            border: 1px solid #000000;
-        }
-
-        .agent-status.outline_agent {
-            background: #e0e0e0;
-            color: #000000;
-            border: 1px solid #000000;
-        }
-
-        .agent-status.slide_agent {
-            background: #d0d0d0;
-            color: #000000;
-            border: 1px solid #000000;
-        }
-
-        .timestamp {
-            font-size: 12px;
-            opacity: 0.6;
-            margin-top: 5px;
-        }
-
-        .slide-counter {
-            background: #f0f0f0;
-            color: #000000;
-            padding: 10px;
-            text-align: center;
-            font-weight: bold;
-            border-bottom: 2px solid #000000;
-        }
-
-        /* New styles for inline text editing functionality */
-        .slide-edit-mode {
-            position: relative;
-        }
-
-        .slide-edit-indicator {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0, 123, 255, 0.1);
-            color: #007bff;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: bold;
-            opacity: 1;
-            transition: opacity 0.3s ease;
-            z-index: 11;
-            pointer-events: none;
-        }
-
-        .slide-edit-btn {
-            transition: all 0.3s ease;
-        }
-
-        .slide-edit-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
-        }
-
-        .text-editor-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: none;
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .text-editor-content {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            max-width: 700px;
-            min-width: 600px;
-            max-height: 600px;
-            overflow-y: auto;
-            position: relative;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-
-        .text-editor-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-
-        .text-editor-header h3 {
-            margin: 0;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .text-editor-toolbar {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 10px;
-            background: #f8f9fa;
-            border: 2px solid #e0e0e0;
-            border-bottom: 1px solid #e0e0e0;
-            border-radius: 8px 8px 0 0;
-            margin-bottom: 0;
-        }
-
-        .toolbar-group {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 6px;
-            border-right: 1px solid #dee2e6;
-        }
-
-        .toolbar-group:last-child {
-            border-right: none;
-        }
-
-        .toolbar-group button {
-            padding: 6px 10px;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-            transition: all 0.2s ease;
-            min-width: 32px;
-            height: 32px;
-        }
-
-        .toolbar-group button:hover {
-            background: #e9ecef;
-            border-color: #007bff;
-        }
-
-        .toolbar-group button:active,
-        .toolbar-group button.active {
-            background: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
-
-        .toolbar-group select {
-            padding: 4px 8px;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            background: white;
-            font-size: 12px;
-            height: 32px;
-        }
-
-        .toolbar-group input[type="color"] {
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            width: 32px;
-            height: 32px;
-            padding: 0;
-            cursor: pointer;
-        }
-
-        .toolbar-group label {
-            font-size: 12px;
-            font-weight: bold;
-            color: #495057;
-            margin-right: 4px;
-        }
-
-        .text-editor-area {
-            width: 100%;
-            min-height: 200px;
-            max-height: 300px;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-top: none;
-            border-radius: 0 0 8px 8px;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 14px;
-            outline: none;
-            line-height: 1.6;
-            overflow-y: auto;
-            background: white;
-        }
-
-        .text-editor-area:focus {
-            border-color: #007bff;
-        }
-
-        .text-editor-area:empty:before {
-            content: attr(placeholder);
-            color: #6c757d;
-            font-style: italic;
-        }
-
-        .text-editor-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-            justify-content: flex-end;
-        }
-
-        .btn-save, .btn-cancel, .btn-close {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-
-        .btn-save {
-            background: #000000;
-            color: white;
-        }
-
-        .btn-save:hover {
-            background: #333333;
-        }
-
-        .btn-cancel, .btn-close {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-cancel:hover, .btn-close:hover {
-            background: #545b62;
-        }
-
-        .editing-indicator {
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            background: #ffc107;
-            color: #000;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: bold;
-            z-index: 12;
-        }
-
-        .slide-saving {
-            opacity: 0.7;
-            pointer-events: none;
-        }
-
-        /* Streaming message styles */
-        .message.streaming {
-            border-left: 3px solid #007bff;
-            background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
-            position: relative;
-        }
-
-        .streaming-content {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            line-height: 1.6;
-            max-width: 100%;
-        }
-
-        .streaming-content h1, 
-        .streaming-content h2, 
-        .streaming-content h3 {
-            margin-top: 20px;
-            margin-bottom: 10px;
-            line-height: 1.3;
-        }
-
-        .streaming-content h1 {
-            font-size: 24px;
-            color: #007bff;
-            border-bottom: 2px solid #007bff;
-            padding-bottom: 5px;
-        }
-
-        .streaming-content h2 {
-            font-size: 20px;
-            color: #007bff;
-        }
-
-        .streaming-content h3 {
-            font-size: 18px;
-            color: #007bff;
-        }
-
-        .streaming-content strong {
-            font-weight: bold;
-            color: #333;
-        }
-
-        .streaming-content em {
-            font-style: italic;
-            color: #555;
-        }
-
-        .streaming-content code {
-            background: #f1f3f4;
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 0.9em;
-            color: #d63384;
-        }
-
-        .streaming-content hr {
-            border: none;
-            border-top: 2px solid #e0e0e0;
-            margin: 20px 0;
-        }
-
-        .typing-cursor {
-            color: #007bff;
-            font-weight: bold;
-        }
-
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-        }
-
-        .agent-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-            color: #007bff;
-            font-weight: bold;
-        }
-
-        .tool-usage {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-left: 4px solid #007bff;
-            margin: 8px 0;
-            animation: slideInTool 0.3s ease-out;
-        }
-
-        @keyframes slideInTool {
-            from {
-                opacity: 0;
-                transform: translateX(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        /* AI Assistant Modal Styles */
-        .ai-assistant-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: none;
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .ai-assistant-content {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            max-width: 600px;
-            min-width: 500px;
-            max-height: 500px;
-            overflow-y: auto;
-            position: relative;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-
-        .ai-assistant-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-
-        .ai-assistant-header h3 {
-            margin: 0;
-            font-size: 18px;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .ai-request-area {
-            width: 100%;
-            min-height: 120px;
-            max-height: 200px;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 14px;
-            outline: none;
-            line-height: 1.6;
-            resize: vertical;
-            background: white;
-        }
-
-        .ai-request-area:focus {
-            border-color: #007bff;
-        }
-
-        .ai-request-area::placeholder {
-            color: #6c757d;
-            font-style: italic;
-        }
-
-        .ai-assistant-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-            justify-content: flex-end;
-        }
-
-        .btn-ask-ai {
-            background: #000000;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-ask-ai:hover {
-            background: #333333;
-        }
-
-        .btn-ask-ai:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-
-        .slide-header-buttons {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .slide-assistant-btn {
-            background: #000000;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .slide-assistant-btn:hover {
-            background: #333333;
-            transform: scale(1.05);
-        }
-
-        .ai-processing {
-            text-align: center;
-            padding: 20px;
-            color: #007bff;
-        }
-
-        .ai-processing .loading {
-            margin-right: 10px;
-        }
-
-        /* Outline Approval Styles */
-        .outline-approval-message {
-            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-            border: 2px solid #2196f3;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 15px 0;
-            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
-        }
-
-        .approval-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-            font-weight: bold;
-            color: #1976d2;
-            font-size: 16px;
-        }
-
-        .approval-content {
-            background: white;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-            border-left: 4px solid #2196f3;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.6;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .approval-buttons {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin-top: 15px;
-        }
-
-        .approval-btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-        }
-
-        .approve-btn {
-            background: #4caf50;
-            color: white;
-        }
-
-        .approve-btn:hover {
-            background: #45a049;
-            transform: scale(1.05);
-        }
-
-        .reject-btn {
-            background: #f44336;
-            color: white;
-        }
-
-        .reject-btn:hover {
-            background: #da190b;
-            transform: scale(1.05);
-        }
-
-        .approval-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .approval-processing {
-            text-align: center;
-            padding: 10px;
-            color: #666;
-            font-style: italic;
-        }
-
-        /* Responsive adjustments for layout */
-        @media (max-width: 1400px) {
-            .chat-panel {
-                flex: 1;
-                min-width: 350px;
-                max-width: 500px;
-            }
-            
-            .slides-panel {
-                flex: 1.2;
-                min-width: 600px;
-            }
-        }
-
-        @media (max-width: 1000px) {
-            .container {
-                flex-direction: column;
-            }
-            
-            .chat-panel {
-                flex: 0 0 250px;
-                min-width: auto;
-                max-width: none;
-            }
-            
-            .slides-panel {
-                flex: 1;
-                min-width: auto;
-            }
-            
-            .iframe-container {
-                height: 350px;
-            }
-            
-            .slide-content iframe {
-                height: 350px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
@@ -1013,8 +20,13 @@
                 </div>
             </div>
             <div class="chat-input">
-                <input type="text" id="messageInput" placeholder="Type your message..." maxlength="500">
-                <button id="sendButton">Send</button>
+                <div class="input-container">
+                    <textarea id="messageInput" placeholder="Type your message... (Press Ctrl+Enter to send)" maxlength="8000" rows="1"></textarea>
+                    <div class="input-controls">
+                        <span class="char-counter" id="charCounter">0/8000</span>
+                        <button id="sendButton">Send</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1024,16 +36,21 @@
                 <span>🎯 Generated Slides (Click Edit button to enable text editing)</span>
                 <div class="header-buttons">
                     <div class="export-dropdown">
-                        <button class="export-btn pdf" onclick="toggleExportDropdown()" title="Export slides to PDF">
-                            📄 Export PDF
+                        <button class="export-btn pdf" onclick="toggleExportDropdown()" title="Export slides">
+                            📄 Export
                         </button>
                         <div id="exportDropdown" class="dropdown-content">
-                            <a onclick="exportAllSlidesPDF()">📄 Export All Slides (Combined PDF)</a>
-                            <a onclick="exportIndividualSlidesPDF()">📄 Export Individual PDFs</a>
-                            <a onclick="showSlideSelector()">📄 Export Selected Slides</a>
+                            <div class="export-section">
+                                <div class="export-section-title">📄 PDF Export</div>
+                                <a onclick="exportAllSlidesPDF()">📄 Export All Slides (Combined PDF)</a>
+                            </div>
+                            <div class="export-section">
+                                <div class="export-section-title">📊 PPTX Export</div>
+                                <a onclick="exportAllSlidesPPTX()">📊 Export All Slides (Combined PPTX)</a>
+                            </div>
                         </div>
                     </div>
-                    <button id="presentSlidesBtn" class="present-slides-btn" onclick="openPresentationMode()" title="Open slides in presentation mode">
+                    <button id="presentSlidesBtn" class="present-slides-btn" onclick="openPresentationMode()" title="Open fullscreen presentation mode (New tab)">
                         📊 Present
                     </button>
                 </div>
@@ -1154,6 +171,34 @@ Examples:
         </div>
     </div>
 
+    <!-- Outline Editor Modal -->
+    <div class="outline-editor-modal" id="outlineEditorModal">
+        <div class="outline-editor-content">
+            <div class="outline-editor-header">
+                <h3>Edit Outline</h3>
+                <button class="btn-close" onclick="closeOutlineEditor()">×</button>
+            </div>
+            
+            <div class="outline-editor-body">
+                <textarea id="outlineEditorArea" class="outline-editor-area" placeholder="Edit the outline content..."></textarea>
+                <div class="outline-editor-tips">
+                    <div class="tips-title">💡 Editing Tips:</div>
+                    <ul>
+                        <li>Each slide should start with "Slide X:" format</li>
+                        <li>Use clear titles and bullet points for content</li>
+                        <li>Maintain logical flow between slides</li>
+                        <li>Include relevant details for each slide</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="outline-editor-buttons">
+                <button class="btn-cancel" onclick="closeOutlineEditor()">Cancel</button>
+                <button class="btn-save-outline" onclick="saveEditedOutline()">✅ Save & Continue</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Initialize Socket.IO connection
         const socket = io();
@@ -1216,7 +261,12 @@ Examples:
         });
 
         socket.on('text_updated', (data) => {
-            console.log('Received text_updated event:', data);
+            console.log('📥 RECEIVED TEXT_UPDATED EVENT:');
+            console.log('- Slide number:', data.slide_number);
+            console.log('- Content length:', data.content?.length);
+            console.log('- Timestamp:', data.timestamp);
+            console.log('- Full data:', data);
+            
             updateSlideContent(data);
             addChatMessage('system', `Text updated in slide ${data.slide_number} successfully!`);
             
@@ -1227,7 +277,12 @@ Examples:
                 const editingIndicator = slideDiv.querySelector('.editing-indicator');
                 if (editingIndicator) {
                     editingIndicator.remove();
+                    console.log('✅ Removed saving indicator');
+                } else {
+                    console.log('⚠️ No saving indicator found to remove');
                 }
+            } else {
+                console.warn('❌ Could not find slide div to remove saving indicator');
             }
         });
 
@@ -1380,18 +435,24 @@ Examples:
             approvalDiv.id = 'outline-approval-interface';
             
             approvalDiv.innerHTML = `
-                <div class="approval-content">
+                <div class="approval-content" id="outline-display-content">
                     ${outlineContent.replace(/\n/g, '<br>')}
                 </div>
                 <div class="approval-buttons">
                     <button class="approval-btn approve-btn" onclick="approveOutline()">
                         ✅ Approve & Continue
                     </button>
+                    <button class="approval-btn edit-btn" onclick="editOutline()">
+                        ✏️ Edit Outline
+                    </button>
                     <button class="approval-btn reject-btn" onclick="rejectOutline()">
                         ❌ Reject & Regenerate
                     </button>
                 </div>
             `;
+            
+            // Store original outline content for editing
+            window.currentOutlineContent = outlineContent;
             
             if (timestamp) {
                 const timestampDiv = document.createElement('div');
@@ -1436,6 +497,84 @@ Examples:
             socket.emit('send_message', { message: 'reject' });
             
             updateStatus('Outline rejected. Regenerating...');
+        }
+
+        // Outline Editing Functions
+        function editOutline() {
+            console.log('📝 Opening outline editor');
+            
+            const modal = document.getElementById('outlineEditorModal');
+            const textarea = document.getElementById('outlineEditorArea');
+            
+            if (modal && textarea) {
+                // Convert HTML back to plain text for editing
+                const plainTextContent = window.currentOutlineContent
+                    .replace(/<br\s*\/?>/gi, '\n')
+                    .replace(/<[^>]*>/g, '')
+                    .replace(/&nbsp;/g, ' ')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"');
+                
+                textarea.value = plainTextContent;
+                modal.style.display = 'flex';
+                textarea.focus();
+                
+                console.log('✅ Outline editor opened with content:', plainTextContent.substring(0, 100) + '...');
+            } else {
+                console.error('❌ Could not find outline editor elements');
+                alert('Error: Could not open outline editor');
+            }
+        }
+        
+        function closeOutlineEditor() {
+            const modal = document.getElementById('outlineEditorModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
+        function saveEditedOutline() {
+            const textarea = document.getElementById('outlineEditorArea');
+            const editedContent = textarea.value.trim();
+            
+            console.log('💾 SAVE EDITED OUTLINE DEBUG:');
+            console.log('- Edited content length:', editedContent.length);
+            console.log('- Edited content preview:', editedContent.substring(0, 200) + '...');
+            
+            if (!editedContent) {
+                alert('Please enter outline content before saving.');
+                return;
+            }
+            
+            // Close the modal
+            closeOutlineEditor();
+            
+            // Disable approval interface buttons and show processing
+            const approvalInterface = document.getElementById('outline-approval-interface');
+            if (approvalInterface) {
+                const buttons = approvalInterface.querySelectorAll('.approval-btn');
+                buttons.forEach(btn => btn.disabled = true);
+                
+                const buttonsContainer = approvalInterface.querySelector('.approval-buttons');
+                buttonsContainer.innerHTML = '<div class="approval-processing">Processing edited outline...</div>';
+                
+                // Update the displayed content with edited version
+                const displayContent = document.getElementById('outline-display-content');
+                if (displayContent) {
+                    displayContent.innerHTML = editedContent.replace(/\n/g, '<br>');
+                }
+            }
+            
+            // Send edited outline through the message system
+            const editedMessage = `EDITED_OUTLINE:\n${editedContent}`;
+            
+            console.log('📤 Sending edited outline message');
+            socket.emit('send_message', { message: editedMessage });
+            
+            updateStatus('Edited outline submitted. Proceeding to layout design...');
+            addChatMessage('system', `📝 Outline edited and submitted with ${editedContent.split('\n').length} lines of content.`);
         }
 
         function addAgentStatusMessage(data) {
@@ -1779,30 +918,45 @@ Examples:
         }
 
         function updateSlideContent(slideData) {
-            console.log(`Updating slide ${slideData.slide_number} content`);
+            console.log('🔄 UPDATE SLIDE CONTENT DEBUG:');
+            console.log(`- Updating slide ${slideData.slide_number} content`);
+            console.log(`- Content preview: ${slideData.content?.substring(0, 200)}...`);
+            
             const slideDiv = document.querySelector(`[data-slide-number="${slideData.slide_number}"]`);
             if (slideDiv) {
+                console.log('✅ Found slide div');
                 const iframe = slideDiv.querySelector('iframe');
                 if (iframe) {
-                    console.log(`Found iframe for slide ${slideData.slide_number}, updating srcdoc`);
+                    console.log('✅ Found iframe, updating srcdoc');
+                    console.log(`- Old srcdoc length: ${iframe.srcdoc?.length || 0}`);
+                    console.log(`- New content length: ${slideData.content?.length || 0}`);
+                    
                     iframe.srcdoc = slideData.content;
                     
                     // Force iframe reload
                     iframe.onload = () => {
-                        console.log(`Iframe loaded for slide ${slideData.slide_number}`);
+                        console.log(`✅ Iframe loaded for slide ${slideData.slide_number}`);
                         setTimeout(() => {
                             const isEditMode = slideDiv.classList.contains('slide-edit-mode');
-                            console.log(`Re-injecting editing with mode: ${isEditMode}`);
+                            console.log(`🔄 Re-injecting editing with mode: ${isEditMode}`);
                             injectInlineEditingToIframe(iframe, slideData.slide_number, isEditMode);
+                            console.log('✅ Slide content update completed');
                         }, 100);
                     };
                     
-                    console.log(`Updated slide ${slideData.slide_number} content`);
+                    // Also trigger onload manually in case it doesn't fire
+                    setTimeout(() => {
+                        if (!iframe.contentDocument || iframe.contentDocument.readyState !== 'complete') {
+                            console.log('⚠️ Iframe did not load naturally, forcing reload');
+                            iframe.onload();
+                        }
+                    }, 500);
+                    
                 } else {
-                    console.warn(`No iframe found for slide ${slideData.slide_number}`);
+                    console.warn(`❌ No iframe found for slide ${slideData.slide_number}`);
                 }
             } else {
-                console.warn(`No slide div found for slide number ${slideData.slide_number}`);
+                console.warn(`❌ No slide div found for slide number ${slideData.slide_number}`);
             }
         }
 
@@ -2083,18 +1237,20 @@ Examples:
         }
 
         function saveTextEdit() {
-            if (currentEditingSlide === null || currentEditingElement === null) return;
+            if (currentEditingSlide === null || currentEditingElement === null) {
+                console.warn('Cannot save: no slide or element selected');
+                return;
+            }
             
             const newHtmlContent = textEditorArea.innerHTML.trim();
             const newTextContent = textEditorArea.textContent.trim();
             
-            console.log('Saving text edit:', {
-                slide: currentEditingSlide,
-                textId: currentEditingElement,
-                original: originalTextContent,
-                newHtml: newHtmlContent,
-                newText: newTextContent
-            });
+            console.log('🔄 SAVE TEXT EDIT DEBUG:');
+            console.log('- Slide number:', currentEditingSlide);
+            console.log('- Text ID:', currentEditingElement);
+            console.log('- Original text:', originalTextContent);
+            console.log('- New HTML content:', newHtmlContent);
+            console.log('- New text content:', newTextContent);
             
             if (!newTextContent) {
                 alert('Please enter some text content.');
@@ -2116,6 +1272,9 @@ Examples:
                 editingIndicator.className = 'editing-indicator';
                 editingIndicator.textContent = 'Saving...';
                 slideDiv.appendChild(editingIndicator);
+                console.log('✅ Added saving indicator to slide');
+            } else {
+                console.warn('❌ Could not find slide div for saving indicator');
             }
             
             // Send edit request to backend with both HTML and text content
@@ -2128,7 +1287,7 @@ Examples:
                 is_rich_text: true // Flag to indicate this is rich text
             };
             
-            console.log('Sending edit_text event:', editData);
+            console.log('📤 Sending edit_text event:', editData);
             socket.emit('edit_text', editData);
             
             closeTextEditor();
@@ -2190,15 +1349,46 @@ Examples:
         // Event listeners
         sendButton.addEventListener('click', sendMessage);
         
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
+        // Enhanced textarea handling
+        function autoResizeTextarea() {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+        }
+        
+        function updateCharCounter() {
+            const charCounter = document.getElementById('charCounter');
+            const currentLength = messageInput.value.length;
+            const maxLength = messageInput.maxLength;
+            
+            charCounter.textContent = `${currentLength}/${maxLength}`;
+            
+            // Update counter style based on length
+            charCounter.className = 'char-counter';
+            if (currentLength > maxLength * 0.9) {
+                charCounter.classList.add('danger');
+            } else if (currentLength > maxLength * 0.8) {
+                charCounter.classList.add('warning');
+            }
+        }
+        
+        messageInput.addEventListener('keydown', (e) => {
+            // Ctrl+Enter or Cmd+Enter to send
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
                 sendMessage();
             }
+            // Shift+Enter to add new line (default behavior)
+            // Regular Enter also adds new line (default behavior)
         });
 
         messageInput.addEventListener('input', () => {
+            autoResizeTextarea();
+            updateCharCounter();
             sendButton.disabled = !messageInput.value.trim() || isGenerating;
         });
+        
+        // Initialize character counter
+        updateCharCounter();
 
         // Close modals when clicking outside
         textEditorModal.addEventListener('click', (e) => {
@@ -2231,6 +1421,681 @@ Examples:
 
         // Presentation Mode Functions
         function openPresentationMode() {
+            const slides = document.querySelectorAll('.slide');
+            if (slides.length === 0) {
+                alert('No slides available for presentation.');
+                return;
+            }
+
+            // Collect all slide content
+            const slideContents = [];
+            slides.forEach((slideDiv, index) => {
+                const iframe = slideDiv.querySelector('iframe');
+                if (iframe && iframe.srcdoc) {
+                    slideContents.push({
+                        number: index + 1,
+                        content: iframe.srcdoc,
+                        title: `Slide ${index + 1}`
+                    });
+                }
+            });
+
+            if (slideContents.length === 0) {
+                alert('No slide content found for presentation.');
+                return;
+            }
+
+            // Create presentation window/tab with maximum viewport
+            const presentationWindow = window.open('', '_blank', 
+                `width=${screen.width},height=${screen.height},top=0,left=0,fullscreen=yes,scrollbars=no,menubar=no,toolbar=no,status=no,location=no,resizable=yes,titlebar=no`);
+            
+            if (!presentationWindow) {
+                alert('Please allow pop-ups to open presentation mode.');
+                return;
+            }
+
+            // Generate presentation HTML with fullscreen trigger
+            const presentationHTML = createPresentationHTML(slideContents);
+            
+            // Write to new window
+            presentationWindow.document.write(presentationHTML);
+            presentationWindow.document.close();
+            
+            // Focus the presentation window
+            presentationWindow.focus();
+            
+            // Multiple approaches to enter fullscreen
+            setTimeout(() => {
+                try {
+                    // Method 1: Try immediate fullscreen
+                    const docElement = presentationWindow.document.documentElement;
+                    if (docElement.requestFullscreen) {
+                        docElement.requestFullscreen().catch(err => {
+                            console.log('Immediate fullscreen failed:', err);
+                            // Fallback: Show instruction
+                            showFullscreenInstruction(presentationWindow);
+                        });
+                    } else if (docElement.webkitRequestFullscreen) {
+                        docElement.webkitRequestFullscreen();
+                    } else if (docElement.msRequestFullscreen) {
+                        docElement.msRequestFullscreen();
+                    } else {
+                        // Fallback: Show instruction
+                        showFullscreenInstruction(presentationWindow);
+                    }
+                } catch (e) {
+                    console.log('Fullscreen not supported:', e);
+                    showFullscreenInstruction(presentationWindow);
+                }
+            }, 100);
+            
+            // Add keyboard listener for F11 instruction
+            presentationWindow.addEventListener('keydown', (e) => {
+                if (e.key === 'F11') {
+                    e.preventDefault();
+                    toggleFullscreen(presentationWindow);
+                }
+            });
+
+            // Add status message
+            addChatMessage('system', `🎯 Presentation mode opened with ${slideContents.length} slides. Use ← → to navigate, F11 or double-click for fullscreen, ESC to exit.`);
+        }
+
+        function showFullscreenInstruction(presentationWindow) {
+            // Show instruction overlay for manual fullscreen
+            setTimeout(() => {
+                try {
+                    const instructionDiv = presentationWindow.document.createElement('div');
+                    instructionDiv.id = 'fullscreen-instruction';
+                    instructionDiv.innerHTML = `
+                        <div style="
+                            position: fixed;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            background: rgba(0, 0, 0, 0.9);
+                            color: white;
+                            padding: 30px;
+                            border-radius: 15px;
+                            text-align: center;
+                            z-index: 10000;
+                            font-size: 18px;
+                            border: 2px solid #007bff;
+                            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+                            animation: fadeIn 0.5s ease;
+                        ">
+                                                         <div style="font-size: 24px; margin-bottom: 15px;">🖥️ For Best Experience</div>
+                             <div style="margin-bottom: 10px;"><strong>Press F11</strong> or <strong>double-click</strong> to enter fullscreen</div>
+                             <div style="font-size: 14px; opacity: 0.8;">Click anywhere to dismiss this message</div>
+                        </div>
+                        <style>
+                            @keyframes fadeIn {
+                                from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                                to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            }
+                        </style>
+                    `;
+                    
+                    presentationWindow.document.body.appendChild(instructionDiv);
+                    
+                    // Auto hide after 4 seconds
+                    setTimeout(() => {
+                        if (instructionDiv && instructionDiv.parentNode) {
+                            instructionDiv.style.animation = 'fadeOut 0.5s ease';
+                            setTimeout(() => {
+                                if (instructionDiv && instructionDiv.parentNode) {
+                                    instructionDiv.parentNode.removeChild(instructionDiv);
+                                }
+                            }, 500);
+                        }
+                    }, 4000);
+                    
+                    // Hide on click
+                    instructionDiv.addEventListener('click', () => {
+                        if (instructionDiv && instructionDiv.parentNode) {
+                            instructionDiv.style.animation = 'fadeOut 0.5s ease';
+                            setTimeout(() => {
+                                if (instructionDiv && instructionDiv.parentNode) {
+                                    instructionDiv.parentNode.removeChild(instructionDiv);
+                                }
+                            }, 500);
+                        }
+                    });
+                    
+                    // Add fadeOut animation
+                    const style = presentationWindow.document.createElement('style');
+                    style.textContent += `
+                        @keyframes fadeOut {
+                            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            to { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                        }
+                    `;
+                    presentationWindow.document.head.appendChild(style);
+                    
+                } catch (e) {
+                    console.log('Could not show fullscreen instruction:', e);
+                }
+            }, 500);
+        }
+
+        function toggleFullscreen(presentationWindow) {
+            try {
+                const doc = presentationWindow.document;
+                if (!doc.fullscreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+                    // Enter fullscreen
+                    if (doc.documentElement.requestFullscreen) {
+                        doc.documentElement.requestFullscreen();
+                    } else if (doc.documentElement.webkitRequestFullscreen) {
+                        doc.documentElement.webkitRequestFullscreen();
+                    } else if (doc.documentElement.msRequestFullscreen) {
+                        doc.documentElement.msRequestFullscreen();
+                    }
+                } else {
+                    // Exit fullscreen
+                    if (doc.exitFullscreen) {
+                        doc.exitFullscreen();
+                    } else if (doc.webkitExitFullscreen) {
+                        doc.webkitExitFullscreen();
+                    } else if (doc.msExitFullscreen) {
+                        doc.msExitFullscreen();
+                    }
+                }
+            } catch (e) {
+                console.log('Toggle fullscreen failed:', e);
+            }
+        }
+
+        function createPresentationHTML(slideContents) {
+            return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentation Mode</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            cursor: none;
+        }
+        
+        .presentation-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .slide-display {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .slide-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+            display: none;
+        }
+        
+        .slide-frame.active {
+            display: block;
+        }
+        
+        .presentation-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        body:hover .presentation-controls,
+        .presentation-controls:hover {
+            opacity: 1;
+        }
+        
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .slide-counter {
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            min-width: 100px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 15px;
+            border-radius: 20px;
+        }
+        
+        .exit-btn {
+            background: rgba(255, 0, 0, 0.7);
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 1001;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        body:hover .exit-btn,
+        .exit-btn:hover {
+            opacity: 1;
+        }
+        
+        .exit-btn:hover {
+            background: rgba(255, 0, 0, 0.9);
+            transform: scale(1.1);
+        }
+        
+        .presentation-info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1001;
+        }
+        
+        body:hover .presentation-info {
+            opacity: 1;
+        }
+        
+        .loading-slide {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: white;
+            font-size: 24px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="presentation-container">
+        <div class="slide-display" id="slideDisplay">
+            ${slideContents.map((slide, index) => `
+                <iframe class="slide-frame ${index === 0 ? 'active' : ''}" 
+                        id="slide-${index}" 
+                        srcdoc="${escapeHtml(slide.content)}"
+                        title="${slide.title}">
+                </iframe>
+            `).join('')}
+        </div>
+        
+        <div class="presentation-controls">
+            <button class="control-btn" id="prevBtn" onclick="previousSlide()" title="Previous slide (←)">
+                ←
+            </button>
+            <div class="slide-counter" id="slideCounter">
+                1 / ${slideContents.length}
+            </div>
+            <button class="control-btn" id="nextBtn" onclick="nextSlide()" title="Next slide (→)">
+                →
+            </button>
+        </div>
+        
+        <button class="exit-btn" onclick="exitPresentation()" title="Exit presentation (ESC)">
+            ×
+        </button>
+        
+                 <div class="presentation-info">
+             <div>🎯 Presentation Mode</div>
+             <div>← → Navigate | F11 or Double-click Fullscreen | ESC Exit</div>
+         </div>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const totalSlides = ${slideContents.length};
+        
+        // Navigation functions
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                currentSlide++;
+                updateSlideDisplay();
+            }
+        }
+        
+        function previousSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                updateSlideDisplay();
+            }
+        }
+        
+        function goToSlide(slideIndex) {
+            if (slideIndex >= 0 && slideIndex < totalSlides) {
+                currentSlide = slideIndex;
+                updateSlideDisplay();
+            }
+        }
+        
+        function updateSlideDisplay() {
+            // Hide all slides
+            document.querySelectorAll('.slide-frame').forEach(frame => {
+                frame.classList.remove('active');
+            });
+            
+            // Show current slide
+            const currentFrame = document.getElementById('slide-' + currentSlide);
+            if (currentFrame) {
+                currentFrame.classList.add('active');
+            }
+            
+            // Update counter
+            document.getElementById('slideCounter').textContent = \`\${currentSlide + 1} / \${totalSlides}\`;
+            
+            // Update navigation buttons
+            document.getElementById('prevBtn').disabled = currentSlide === 0;
+            document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1;
+        }
+        
+        function exitPresentation() {
+            // Exit fullscreen if active
+            if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+            
+            // Close window
+            window.close();
+        }
+        
+                 // Keyboard navigation
+         document.addEventListener('keydown', function(e) {
+             switch(e.key) {
+                 case 'ArrowRight':
+                 case ' ':
+                 case 'PageDown':
+                     e.preventDefault();
+                     nextSlide();
+                     break;
+                 case 'ArrowLeft':
+                 case 'PageUp':
+                     e.preventDefault();
+                     previousSlide();
+                     break;
+                 case 'Home':
+                     e.preventDefault();
+                     goToSlide(0);
+                     break;
+                 case 'End':
+                     e.preventDefault();
+                     goToSlide(totalSlides - 1);
+                     break;
+                 case 'Escape':
+                     e.preventDefault();
+                     exitPresentation();
+                     break;
+                 case 'F11':
+                     e.preventDefault();
+                     toggleFullscreenMode();
+                     break;
+                 case 'f':
+                 case 'F':
+                     if (e.ctrlKey || e.metaKey) {
+                         e.preventDefault();
+                         toggleFullscreenMode();
+                     }
+                     break;
+             }
+         });
+         
+         function toggleFullscreenMode() {
+             try {
+                 if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+                     // Enter fullscreen
+                     if (document.documentElement.requestFullscreen) {
+                         document.documentElement.requestFullscreen();
+                     } else if (document.documentElement.webkitRequestFullscreen) {
+                         document.documentElement.webkitRequestFullscreen();
+                     } else if (document.documentElement.msRequestFullscreen) {
+                         document.documentElement.msRequestFullscreen();
+                     }
+                 } else {
+                     // Exit fullscreen
+                     if (document.exitFullscreen) {
+                         document.exitFullscreen();
+                     } else if (document.webkitExitFullscreen) {
+                         document.webkitExitFullscreen();
+                     } else if (document.msExitFullscreen) {
+                         document.msExitFullscreen();
+                     }
+                 }
+             } catch (e) {
+                 console.log('Fullscreen toggle failed:', e);
+             }
+         }
+         
+         // Auto-attempt fullscreen on load with user interaction fallback
+         function attemptAutoFullscreen() {
+             // Try to enter fullscreen automatically
+             setTimeout(() => {
+                 if (!document.fullscreenElement) {
+                     toggleFullscreenMode();
+                 }
+             }, 100);
+             
+             // Show instruction if not in fullscreen after 2 seconds
+             setTimeout(() => {
+                 if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+                     showFullscreenTip();
+                 }
+             }, 2000);
+         }
+         
+         function showFullscreenTip() {
+             const tip = document.createElement('div');
+             tip.innerHTML = \`
+                 <div style="
+                     position: fixed;
+                     top: 20px;
+                     right: 20px;
+                     background: rgba(0, 123, 255, 0.9);
+                     color: white;
+                     padding: 15px 20px;
+                     border-radius: 10px;
+                     font-size: 14px;
+                     z-index: 10001;
+                     animation: slideIn 0.5s ease;
+                     cursor: pointer;
+                     border: 2px solid rgba(255, 255, 255, 0.3);
+                 ">
+                     <div style="font-weight: bold; margin-bottom: 5px;">💡 Tip</div>
+                     <div>Press <strong>F11</strong> or <strong>double-click</strong> for fullscreen</div>
+                 </div>
+                 <style>
+                     @keyframes slideIn {
+                         from { transform: translateX(100%); opacity: 0; }
+                         to { transform: translateX(0); opacity: 1; }
+                     }
+                 </style>
+             \`;
+             
+             document.body.appendChild(tip);
+             
+             // Auto hide after 3 seconds
+             setTimeout(() => {
+                 if (tip && tip.parentNode) {
+                     tip.style.animation = 'slideOut 0.5s ease';
+                     setTimeout(() => {
+                         if (tip && tip.parentNode) {
+                             tip.parentNode.removeChild(tip);
+                         }
+                     }, 500);
+                 }
+             }, 3000);
+             
+             // Hide on click
+             tip.addEventListener('click', () => {
+                 toggleFullscreenMode();
+                 if (tip && tip.parentNode) {
+                     tip.parentNode.removeChild(tip);
+                 }
+             });
+             
+             // Add slideOut animation
+             const style = document.createElement('style');
+             style.textContent += \`
+                 @keyframes slideOut {
+                     from { transform: translateX(0); opacity: 1; }
+                     to { transform: translateX(100%); opacity: 0; }
+                 }
+             \`;
+             document.head.appendChild(style);
+         }
+        
+                 // Mouse navigation (click on edges)
+         document.addEventListener('click', function(e) {
+             const clickX = e.clientX;
+             const windowWidth = window.innerWidth;
+             
+             // Click on left third = previous
+             if (clickX < windowWidth / 3) {
+                 previousSlide();
+             }
+             // Click on right third = next
+             else if (clickX > (windowWidth * 2) / 3) {
+                 nextSlide();
+             }
+         });
+         
+         // Double-click to toggle fullscreen
+         document.addEventListener('dblclick', function(e) {
+             e.preventDefault();
+             toggleFullscreenMode();
+         });
+        
+                 // Initialize
+         updateSlideDisplay();
+         
+         // Attempt auto fullscreen
+         attemptAutoFullscreen();
+         
+         // Auto-hide cursor after inactivity
+        let cursorTimeout;
+        document.addEventListener('mousemove', function() {
+            document.body.style.cursor = 'default';
+            clearTimeout(cursorTimeout);
+            cursorTimeout = setTimeout(() => {
+                document.body.style.cursor = 'none';
+            }, 3000);
+        });
+        
+        // Scale slides properly after load
+        window.addEventListener('load', function() {
+            document.querySelectorAll('.slide-frame').forEach((frame, index) => {
+                frame.onload = function() {
+                    try {
+                        const slideDoc = frame.contentDocument || frame.contentWindow.document;
+                        const slideContainer = slideDoc.querySelector('.slide-container, body > div:first-child, body');
+                        
+                        if (slideContainer) {
+                            // Ensure proper scaling for presentation
+                            slideContainer.style.transform = 'scale(1)';
+                            slideContainer.style.transformOrigin = 'center center';
+                            slideContainer.style.margin = '0 auto';
+                        }
+                    } catch (e) {
+                        console.log('Could not access iframe content for scaling');
+                    }
+                };
+            });
+        });
+        
+        console.log('Presentation mode initialized with ' + totalSlides + ' slides');
+    </script>
+</body>
+</html>`;
+        }
+        
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
 
         function escapeHtml(unsafe) {
@@ -2360,11 +2225,71 @@ Examples:
             aiRequestArea.disabled = false;
         }
 
-        // PDF Export Functions
+        // Export Functions
         function toggleExportDropdown() {
             const dropdown = document.getElementById('exportDropdown');
             dropdown.classList.toggle('show');
         }
+
+        // PPTX Export Functions
+        function exportAllSlidesPPTX() {
+            const slides = document.querySelectorAll('.slide');
+            if (slides.length === 0) {
+                alert('No slides available to export.');
+                return;
+            }
+
+            // Close dropdown
+            document.getElementById('exportDropdown').classList.remove('show');
+            
+            // Show loading state
+            updateStatus('📊 Generating combined PPTX presentation...');
+            addChatMessage('system', '📊 Starting PPTX export of all slides...');
+
+            // Call the export endpoint
+            fetch('/convert_all_slides_to_pptx', {
+                method: 'GET',
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Get filename from response headers or create a default one
+                    const disposition = response.headers.get('content-disposition');
+                    let filename = 'presentation.pptx';
+                    if (disposition && disposition.includes('filename=')) {
+                        filename = disposition.split('filename=')[1].replace(/"/g, '');
+                    }
+                    
+                    return response.blob().then(blob => ({ blob, filename }));
+                } else {
+                    return response.json().then(data => Promise.reject(data.error || 'PPTX export failed'));
+                }
+            })
+            .then(({ blob, filename }) => {
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                updateStatus('✅ PPTX export completed successfully!');
+                addChatMessage('system', `✅ PPTX export completed! Downloaded: ${filename}`);
+            })
+            .catch(error => {
+                console.error('PPTX Export error:', error);
+                updateStatus('❌ PPTX export failed');
+                addChatMessage('system', `❌ PPTX export failed: ${error}`);
+                alert(`PPTX export failed: ${error}`);
+            });
+        }
+
+
+
+        // PDF Export Functions
 
         // Close dropdown when clicking outside
         window.addEventListener('click', function(event) {
@@ -2433,60 +2358,7 @@ Examples:
             });
         }
 
-        function exportIndividualSlidesPDF() {
-            const slides = document.querySelectorAll('.slide');
-            if (slides.length === 0) {
-                alert('No slides available to export.');
-                return;
-            }
 
-            // Close dropdown
-            document.getElementById('exportDropdown').classList.remove('show');
-            
-            // Show loading state
-            updateStatus('📄 Generating individual PDFs...');
-            addChatMessage('system', '📄 Starting individual PDF export...');
-
-            // Call the export endpoint
-            fetch('/export_pdf/individual', {
-                method: 'GET',
-            })
-            .then(response => {
-                if (response.ok) {
-                    // Get filename from response headers or create a default one
-                    const disposition = response.headers.get('content-disposition');
-                    let filename = 'slides_individual.zip';
-                    if (disposition && disposition.includes('filename=')) {
-                        filename = disposition.split('filename=')[1].replace(/"/g, '');
-                    }
-                    
-                    return response.blob().then(blob => ({ blob, filename }));
-                } else {
-                    return response.json().then(data => Promise.reject(data.error || 'Export failed'));
-                }
-            })
-            .then(({ blob, filename }) => {
-                // Create download link
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                updateStatus('✅ Individual PDF export completed successfully!');
-                addChatMessage('system', `✅ Individual PDF export completed! Downloaded: ${filename}`);
-            })
-            .catch(error => {
-                console.error('Export error:', error);
-                updateStatus('❌ Individual PDF export failed');
-                addChatMessage('system', `❌ Individual PDF export failed: ${error}`);
-                alert(`Individual PDF export failed: ${error}`);
-            });
-        }
 
         function exportSingleSlidePDF(slideNumber) {
             // Show loading state
@@ -2534,82 +2406,7 @@ Examples:
             });
         }
 
-        function showSlideSelector() {
-            const slides = document.querySelectorAll('.slide');
-            if (slides.length === 0) {
-                alert('No slides available to export.');
-                return;
-            }
 
-            // Close dropdown
-            document.getElementById('exportDropdown').classList.remove('show');
-            
-            // Create a simple prompt for slide selection
-            const slideNumbers = Array.from(slides).map((slide, index) => index + 1);
-            const selection = prompt(
-                `Enter slide numbers to export (comma-separated):\nAvailable slides: ${slideNumbers.join(', ')}\n\nExample: 1,3,5`
-            );
-            
-            if (!selection) return;
-            
-            // Parse the selection
-            const selectedSlides = selection.split(',')
-                .map(num => parseInt(num.trim()))
-                .filter(num => !isNaN(num) && num >= 1 && num <= slides.length);
-            
-            if (selectedSlides.length === 0) {
-                alert('No valid slide numbers selected.');
-                return;
-            }
-
-            // Show loading state
-            updateStatus(`📄 Generating PDF for ${selectedSlides.length} selected slides...`);
-            addChatMessage('system', `📄 Exporting selected slides: ${selectedSlides.join(', ')}`);
-
-            // Call the export endpoint
-            fetch('/export_selected_slides_pdf', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ slide_numbers: selectedSlides })
-            })
-            .then(response => {
-                if (response.ok) {
-                    // Get filename from response headers or create a default one
-                    const disposition = response.headers.get('content-disposition');
-                    let filename = 'selected_slides.pdf';
-                    if (disposition && disposition.includes('filename=')) {
-                        filename = disposition.split('filename=')[1].replace(/"/g, '');
-                    }
-                    
-                    return response.blob().then(blob => ({ blob, filename }));
-                } else {
-                    return response.json().then(data => Promise.reject(data.error || 'Export failed'));
-                }
-            })
-            .then(({ blob, filename }) => {
-                // Create download link
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                updateStatus('✅ Selected slides PDF export completed!');
-                addChatMessage('system', `✅ Selected slides exported to PDF: ${filename}`);
-            })
-            .catch(error => {
-                console.error('Export error:', error);
-                updateStatus('❌ Selected slides PDF export failed');
-                addChatMessage('system', `❌ Selected slides PDF export failed: ${error}`);
-                alert(`Selected slides PDF export failed: ${error}`);
-            });
-        }
     </script>
 </body>
 </html>
