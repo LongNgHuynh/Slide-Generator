@@ -81,6 +81,8 @@ dependencies = [
     "weasyprint>=61.0",
     "reportlab>=4.0.0",
     "pypdf2>=3.0.1",
+    "convertapi>=2.0.0",
+    "docling>=2.42.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -1,105 +1,267 @@
-# Presentation Slide Generator
+# 🎯 AI Slide Generator
 
-An AI-powered application that automatically generates professional presentation slides using advanced language models and AI technologies.
+Ứng dụng tạo slide thuyết trình tự động sử dụng AI với kiến trúc multi-agent workflow, hỗ trợ nhiều mô hình AI và xuất file PDF/PPTX.
 
-## Features
+## 📖 Tổng quan
 
-- Generate complete presentations with just a text prompt
-- AI-powered content generation using multiple LLM providers
-- Advanced workflow orchestration with LangGraph
-- Support for multiple AI providers (OpenAI, Anthropic, Google)
-- Comprehensive logging and monitoring with Langfuse
-- AWS integration capabilities
+AI Slide Generator là một ứng dụng web hiện đại cho phép người dùng tạo slide thuyết trình chuyên nghiệp chỉ bằng cách mô tả chủ đề. Ứng dụng sử dụng hệ thống đa tác nhân (multi-agent) thông minh để:
 
-## Setup Instructions
+- 🔍 **Tự động nghiên cứu** thông tin và hình ảnh liên quan
+- 🎨 **Thiết kế layout** và bảng màu phù hợp với chủ đề  
+- 📝 **Tạo nội dung** slide chuyên nghiệp
+- ✏️ **Chỉnh sửa trực tiếp** text trên slide
+- 📄 **Xuất file** PDF và PowerPoint
 
-1. Clone this repository:
-   ```
-   git clone https://github.com/yourusername/slide-generator.git
-   cd slide-generator
-   ```
+## ✨ Tính năng chính
 
-2. Install uv (recommended package installer):
-   ```
-   # On Windows (PowerShell)
-   (Invoke-WebRequest -Uri https://astral.sh/uv/install.ps1 -UseBasicParsing).Content | pwsh -Command -
-   
-   # On macOS/Linux
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
+### 🤖 Hệ thống Multi-Agent
+- **Supervisor Agent**: Điều phối quy trình làm việc
+- **Planner Agent**: Lập kế hoạch chi tiết
+- **Outline Agent** (Research Agent): Nghiên cứu và tạo đề cương
+- **Artist Agent**: Thiết kế bố cục và màu sắc
+- **Slide Agent**: Tạo slide HTML cuối cùng
 
-3. Create and activate a virtual environment using uv:
-   ```
-   uv venv --python=3.11
-   # On Windows
-   .venv\Scripts\activate
-   # On macOS/Linux
-   source .venv/bin/activate
-   ```
+### 🧠 Tích hợp nhiều mô hình AI
+- **Claude 3.7 Sonnet** (AWS Bedrock)
+- **GPT-4o & GPT-o3** (Azure OpenAI)  
+- **Gemini 2.5 Pro & Flash** (Google)
+- Cơ chế fallback tự động giữa các mô hình
 
-4. Install dependencies using uv:
-   ```
-   uv pip install -e .
-   ```
+### 💬 Giao diện thời gian thực
+- Chat interface với Socket.IO
+- Streaming responses từ AI
+- Hiển thị quá trình tạo slide theo thời gian thực
+- Approval workflow cho outline
 
-5. Set up environment variables:
-   Create a `.env` file in the project root with your API keys:
-   ```
-   OPENAI_API_KEY=your_openai_api_key
-   ANTHROPIC_API_KEY=your_anthropic_api_key
-   GOOGLE_API_KEY=your_google_api_key
-   LANGCHAIN_API_KEY=your_langsmith_api_key
-   LANGCHAIN_PROJECT=slide-generator
-   ```
+### 🎨 Thiết kế chuyên nghiệp
+- Responsive HTML slides với Tailwind CSS
+- Bảng màu thông minh dựa trên chủ đề
+- Layout tự động cho từng loại nội dung
+- Tương thích Material Design
 
-## Development
+### ✏️ Chỉnh sửa tương tác
+- Rich text editor với toolbar đầy đủ
+- Chỉnh sửa text trực tiếp trên slide
+- AI Assistant cho chỉnh sửa thông minh
+- Preview và edit mode
 
-To start the LangGraph development server and view your workflows in LangSmith:
+### 📤 Xuất file đa định dạng
+- **PDF**: Playwright với scaling chính xác
+- **PPTX**: ConvertAPI integration
+- Xuất từng slide riêng lẻ hoặc kết hợp
+- Presentation mode toàn màn hình
 
-1. Make sure you have set up your LangSmith API key in the `.env` file
-2. Run the development server:
-   ```
-   langgraph dev
-   ```
+## 🏗️ Kiến trúc hệ thống
 
-3. You can now view and debug your workflows in the LangSmith interface
+![System Architecture](./images/System_Architecture.png)
 
-## Project Structure
+### Backend (Flask + Socket.IO)
+- **app.py**: Server chính với REST API và WebSocket
+- **workflow.py**: LangGraph workflow với các agent
+- **models/LLMs.py**: Cấu hình các mô hình AI
 
-  - `workflows/` - LangGraph workflow definitions
-  - `models/` - LLM model configurations and integrations
-  - `utils/` - Utility functions and tools
-- `generated_slides/` - Directory where generated slides are stored
+### Frontend (Vanilla JavaScript)
+- **templates/index.html**: Interface chính
+- **static/style.css**: Styling responsive
+- Chat panel, slides display, editors
 
-## Dependencies
+### Utils & Tools
+- **utils/tools.py**: Tools cho agents (search, crawl, slide generation)
+- **utils/pdf_export.py**: Xuất PDF với Playwright
+- **utils/pptx_export.py**: Xuất PPTX với ConvertAPI
+- **utils/schemas.py**: Pydantic schemas
 
-The project uses several key dependencies:
-- LangChain and LangGraph for workflow orchestration
-- Multiple LLM providers (OpenAI, Anthropic, Google)
-- Langfuse for monitoring and logging
-- BeautifulSoup4 for web scraping
+## 🚀 Cài đặt
 
-## Requirements
+### Yêu cầu hệ thống
+- Python 3.11+
+- Node.js (cho Playwright)
+- Internet connection (cho AI APIs)
 
-- Python 3.11 or higher
-- API keys for your chosen LLM providers
-- Internet connection for web scraping and API access
+### 1. Clone repository
+```bash
+git clone https://github.com/LongNgHuynh/Slide-Generator.git
+cd Slide-Generator
+```
 
-## Running the Web Application
+### 2. Cài đặt dependencies
+```bash
+# Sử dụng uv (khuyến nghị)
+pip install uv
+uv sync
 
-To use the real-time web interface for generating and viewing slides:
+# Hoặc pip
+pip install -r requirements.txt
+```
 
-1. **Install dependencies** (if you haven't already):
+### 3. Cài đặt Playwright browsers
+```bash
+playwright install chromium
+```
 
-2. **Set up your environment variables** in a `.env` file (see above for required keys).
+### 4. Cấu hình environment variables
+Tạo file `.env`:
 
-3. **Start the Flask web app**:
-   ```bash
-   python app.py
-   ```
+```env
+# Azure OpenAI (GPT-4o, GPT-o3)
+AZURE_OPENAI_API_KEY=your_azure_key
+AZURE_OPENAI_ENDPOINT=your_azure_endpoint
 
-4. **Open your browser** and go to [http://localhost:5000](http://localhost:5000)
+# Google AI (Gemini)
+GOOGLE_API_KEY=your_google_key
 
-- Use the chat panel to request a presentation (e.g., "Create a presentation about AI in education").
-- Slides will appear in real-time on the right as they are generated.
+# AWS Bedrock (Claude)
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_REGION_NAME=us-east-1
+
+# ConvertAPI (PPTX export - tùy chọn)
+CONVERTAPI_API_KEY=your_convertapi_key
+
+# Langfuse (Tracing - tùy chọn)
+LANGFUSE_SECRET_KEY=your_langfuse_secret
+LANGFUSE_PUBLIC_KEY=your_langfuse_public
+```
+
+### 5. Chạy ứng dụng
+```bash
+python app.py
+```
+
+Truy cập: http://localhost:5000
+
+## 📋 Hướng dẫn sử dụng
+
+### 1. Tạo slide mới
+1. Nhập chủ đề vào chat (ví dụ: "Tạo presentation về AI")
+2. Hệ thống sẽ tự động:
+   - Nghiên cứu thông tin
+   - Tạo outline
+   - Thiết kế layout
+   - Sinh slide HTML
+
+### 2. Chỉnh sửa slide
+- **Edit mode**: Click nút "Edit" để bật chế độ chỉnh sửa
+- **Text editing**: Click icon ✏️ bên cạnh text để mở rich text editor
+- **AI Assistant**: Click "🤖 Ask Assistant" để chỉnh sửa với AI
+
+### 3. Xuất file
+- **PDF**: Click "📄 Export" → "Export All Slides (Combined PDF)"
+- **PPTX**: Click "📊 Export" → "Export All Slides (Combined PPTX)"
+- **Presentation**: Click "📊 Present" để mở chế độ trình chiếu
+
+### 4. Chế độ trình chiếu
+- Sử dụng phím mũi tên để điều hướng
+- F11 hoặc double-click để fullscreen
+- ESC để thoát
+
+## 🔧 Cấu hình nâng cao
+
+### Tùy chỉnh AI Models
+Trong `models/LLMs.py`:
+```python
+# Thay đổi mô hình mặc định
+LLM = Gemini()  # Hoặc Claude_3_7_Sonnet(), GPT_4o()
+
+# Cấu hình fallback
+LLM_FALLBACKS = [
+    ("Claude", LLM_CLAUDE),
+    ("Gemini", LLM_GEMINI),
+    # ...
+]
+```
+
+### Tùy chỉnh Design Rules
+Chỉnh sửa `rules/html.txt` và `rules/instruction.txt` để thay đổi style và guidelines cho AI.
+
+### Cấu hình Export
+```python
+# PDF Export settings (utils/pdf_export.py)
+export_slides_to_pdf(
+    slide_files=files,
+    method="playwright",  # hoặc "weasyprint"
+    combine=True
+)
+
+# PPTX Export (yêu cầu ConvertAPI key)
+convert_pdf_to_pptx(pdf_path, output_dir, filename)
+```
+
+## 🔍 API Endpoints
+
+### REST API
+- `GET /` - Main interface
+- `GET /export_pdf/all` - Xuất PDF tất cả slides
+- `GET /export_pdf/<slide_number>` - Xuất PDF slide cụ thể
+- `GET /convert_all_slides_to_pptx` - Xuất PPTX tất cả slides
+- `GET /api/slides/available` - Danh sách slides có sẵn
+
+### Socket.IO Events
+- `send_message` - Gửi tin nhắn từ user
+- `slide_generated` - Nhận slide mới được tạo
+- `text_updated` - Cập nhật text slide
+- `ai_edit_slide` - Chỉnh sửa slide với AI
+
+## 🧪 Testing
+
+```bash
+# Test PDF export
+python -m utils.pdf_export
+
+# Test tools
+python -m utils.tools
+```
+
+## 📊 Monitoring & Tracing
+
+Ứng dụng tích hợp **Langfuse** để theo dõi:
+- AI model usage và performance
+- Workflow execution traces
+- Token usage và costs
+- Error tracking
+
+## 🔒 Bảo mật
+
+- Environment variables cho API keys
+- Input validation và sanitization
+- Rate limiting cho AI calls
+- Secure file handling
+
+## 📈 Performance
+
+- **Parallel tool calls** để tăng tốc
+- **Streaming responses** cho UX tốt hơn
+- **LLM fallback** để đảm bảo availability
+- **Caching** color palettes giữa slides
+
+## 🤝 Đóng góp
+
+1. Fork repository
+2. Tạo feature branch: `git checkout -b feature/new-feature`
+3. Commit changes: `git commit -m 'Add new feature'`
+4. Push to branch: `git push origin feature/new-feature`
+5. Tạo Pull Request
+
+## 📄 License
+
+MIT License - xem file [LICENSE](LICENSE) để biết thêm chi tiết.
+
+## 🆘 Hỗ trợ
+
+Nếu gặp vấn đề:
+1. Kiểm tra logs trong console
+2. Xem file `workflow.log`
+3. Tạo issue với thông tin chi tiết
+4. Kiểm tra API keys và internet connection
+
+## 🚧 Roadmap
+
+- [ ] Hỗ trợ thêm mô hình AI
+- [ ] Template library
+- [ ] Collaboration features
+- [ ] Mobile responsive
+- [ ] Video export
+- [ ] Voice narration
+
+
 
