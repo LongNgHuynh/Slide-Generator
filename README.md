@@ -53,7 +53,7 @@ AI Slide Generator là một ứng dụng web hiện đại cho phép người d
 
 ## 🏗️ Kiến trúc hệ thống
 
-![System Architecture](./images/System_Architecture.png)
+![System Architecture](images/System_Architecture.png)
 
 ### Backend (Flask + Socket.IO)
 - **app.py**: Server chính với REST API và WebSocket
