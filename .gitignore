@@ -136,8 +136,6 @@ ENV/
 env.bak/
 venv.bak/
 
-# md files
-*.md
 
 # examples
 examples/
@@ -162,7 +160,6 @@ dmypy.json
 /data
 
 *.txt
-/images
 
 .langgraph_api/
 
