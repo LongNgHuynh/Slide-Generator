@@ -1,82 +1,82 @@
-# 🎯 AI Slide Generator
+# AI Slide Generator
 
-Ứng dụng tạo slide thuyết trình tự động sử dụng AI với kiến trúc multi-agent workflow, hỗ trợ nhiều mô hình AI và xuất file PDF/PPTX.
+An automated presentation slide generator using AI with multi-agent workflow architecture, supporting multiple AI models and PDF/PPTX export.
 
-## 📖 Tổng quan
+## Overview
 
-AI Slide Generator là một ứng dụng web hiện đại cho phép người dùng tạo slide thuyết trình chuyên nghiệp chỉ bằng cách mô tả chủ đề. Ứng dụng sử dụng hệ thống đa tác nhân (multi-agent) thông minh để:
+AI Slide Generator is a modern web application that allows users to create professional presentation slides simply by describing the topic. The application uses an intelligent multi-agent system to:
 
-- 🔍 **Tự động nghiên cứu** thông tin và hình ảnh liên quan
-- 🎨 **Thiết kế layout** và bảng màu phù hợp với chủ đề  
-- 📝 **Tạo nội dung** slide chuyên nghiệp
-- ✏️ **Chỉnh sửa trực tiếp** text trên slide
-- 📄 **Xuất file** PDF và PowerPoint
+- **Automatically research** relevant information and images
+- **Design layouts** and color schemes appropriate for the topic
+- **Create professional** slide content
+- **Edit text directly** on slides
+- **Export files** in PDF and PowerPoint formats
 
-## ✨ Tính năng chính
+## Key Features
 
-### 🤖 Hệ thống Multi-Agent
-- **Supervisor Agent**: Điều phối quy trình làm việc
-- **Planner Agent**: Lập kế hoạch chi tiết
-- **Outline Agent** (Research Agent): Nghiên cứu và tạo đề cương
-- **Artist Agent**: Thiết kế bố cục và màu sắc
-- **Slide Agent**: Tạo slide HTML cuối cùng
+### Multi-Agent System
+- **Supervisor Agent**: Coordinates the workflow
+- **Planner Agent**: Creates detailed plans
+- **Outline Agent** (Research Agent): Researches and creates outlines
+- **Artist Agent**: Designs layouts and colors
+- **Slide Agent**: Creates final HTML slides
 
-### 🧠 Tích hợp nhiều mô hình AI
+### Multiple AI Model Integration
 - **Claude 3.7 Sonnet** (AWS Bedrock)
-- **GPT-4o & GPT-o3** (Azure OpenAI)  
+- **GPT-4o & GPT-o3** (Azure OpenAI)
 - **Gemini 2.5 Pro & Flash** (Google)
-- Cơ chế fallback tự động giữa các mô hình
+- Automatic fallback mechanism between models
 
-### 💬 Giao diện thời gian thực
-- Chat interface với Socket.IO
-- Streaming responses từ AI
-- Hiển thị quá trình tạo slide theo thời gian thực
-- Approval workflow cho outline
+### Real-time Interface
+- Chat interface with Socket.IO
+- Streaming responses from AI
+- Real-time display of slide creation process
+- Approval workflow for outlines
 
-### 🎨 Thiết kế chuyên nghiệp
-- Responsive HTML slides với Tailwind CSS
-- Bảng màu thông minh dựa trên chủ đề
-- Layout tự động cho từng loại nội dung
-- Tương thích Material Design
+### Professional Design
+- Responsive HTML slides with Tailwind CSS
+- Intelligent color palettes based on topic
+- Automatic layouts for each content type
+- Material Design compatibility
 
-### ✏️ Chỉnh sửa tương tác
-- Rich text editor với toolbar đầy đủ
-- Chỉnh sửa text trực tiếp trên slide
-- AI Assistant cho chỉnh sửa thông minh
-- Preview và edit mode
+### Interactive Editing
+- Rich text editor with complete toolbar
+- Direct text editing on slides
+- AI Assistant for intelligent editing
+- Preview and edit modes
 
-### 📤 Xuất file đa định dạng
-- **PDF**: Playwright với scaling chính xác
+### Multi-format Export
+- **PDF**: Playwright with precise scaling
 - **PPTX**: ConvertAPI integration
-- Xuất từng slide riêng lẻ hoặc kết hợp
-- Presentation mode toàn màn hình
+- Export individual slides or combined
+- Fullscreen presentation mode
 
-## 🏗️ Kiến trúc hệ thống
+## System Architecture
 
 ![System Architecture](images/System_Architecture.png)
 
 ### Backend (Flask + Socket.IO)
-- **app.py**: Server chính với REST API và WebSocket
-- **workflow.py**: LangGraph workflow với các agent
-- **models/LLMs.py**: Cấu hình các mô hình AI
+- **app.py**: Main server with REST API and WebSocket
+- **workflow.py**: LangGraph workflow with agents
+- **models/LLMs.py**: AI model configurations
 
 ### Frontend (Vanilla JavaScript)
-- **templates/index.html**: Interface chính
-- **static/style.css**: Styling responsive
+- **templates/index.html**: Main interface
+- **static/style.css**: Responsive styling
 - Chat panel, slides display, editors
 
 ### Utils & Tools
-- **utils/tools.py**: Tools cho agents (search, crawl, slide generation)
-- **utils/pdf_export.py**: Xuất PDF với Playwright
-- **utils/pptx_export.py**: Xuất PPTX với ConvertAPI
+- **utils/tools.py**: Tools for agents (search, crawl, slide generation)
+- **utils/pdf_export.py**: PDF export with Playwright
+- **utils/pptx_export.py**: PPTX export with ConvertAPI
 - **utils/schemas.py**: Pydantic schemas
 
-## 🚀 Cài đặt
+## Installation
 
-### Yêu cầu hệ thống
+### System Requirements
 - Python 3.11+
-- Node.js (cho Playwright)
-- Internet connection (cho AI APIs)
+- Node.js (for Playwright)
+- Internet connection (for AI APIs)
 
 ### 1. Clone repository
 ```bash
@@ -84,23 +84,23 @@ git clone https://github.com/LongNgHuynh/Slide-Generator.git
 cd Slide-Generator
 ```
 
-### 2. Cài đặt dependencies
+### 2. Install dependencies
 ```bash
-# Sử dụng uv (khuyến nghị)
+# Using uv (recommended)
 pip install uv
 uv sync
 
-# Hoặc pip
+# Or pip
 pip install -r requirements.txt
 ```
 
-### 3. Cài đặt Playwright browsers
+### 3. Install Playwright browsers
 ```bash
 playwright install chromium
 ```
 
-### 4. Cấu hình environment variables
-Tạo file `.env`:
+### 4. Configure environment variables
+Create a `.env` file:
 
 ```env
 # Azure OpenAI (GPT-4o, GPT-o3)
@@ -115,55 +115,55 @@ AWS_ACCESS_KEY_ID=your_aws_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret
 AWS_REGION_NAME=us-east-1
 
-# ConvertAPI (PPTX export - tùy chọn)
+# ConvertAPI (PPTX export - optional)
 CONVERTAPI_API_KEY=your_convertapi_key
 
-# Langfuse (Tracing - tùy chọn)
+# Langfuse (Tracing - optional)
 LANGFUSE_SECRET_KEY=your_langfuse_secret
 LANGFUSE_PUBLIC_KEY=your_langfuse_public
 ```
 
-### 5. Chạy ứng dụng
+### 5. Run the application
 ```bash
 python app.py
 ```
 
-Truy cập: http://localhost:5000
+Access at: http://localhost:5000
 
-## 📋 Hướng dẫn sử dụng
+## User Guide
 
-### 1. Tạo slide mới
-1. Nhập chủ đề vào chat (ví dụ: "Tạo presentation về AI")
-2. Hệ thống sẽ tự động:
-   - Nghiên cứu thông tin
-   - Tạo outline
-   - Thiết kế layout
-   - Sinh slide HTML
+### 1. Create new slides
+1. Enter a topic in the chat (example: "Create a presentation about AI")
+2. The system will automatically:
+   - Research information
+   - Create an outline
+   - Design the layout
+   - Generate HTML slides
 
-### 2. Chỉnh sửa slide
-- **Edit mode**: Click nút "Edit" để bật chế độ chỉnh sửa
-- **Text editing**: Click icon ✏️ bên cạnh text để mở rich text editor
-- **AI Assistant**: Click "🤖 Ask Assistant" để chỉnh sửa với AI
+### 2. Edit slides
+- **Edit mode**: Click the "Edit" button to enable editing mode
+- **Text editing**: Click the edit icon next to text to open the rich text editor
+- **AI Assistant**: Click "Ask Assistant" to edit with AI
 
-### 3. Xuất file
-- **PDF**: Click "📄 Export" → "Export All Slides (Combined PDF)"
-- **PPTX**: Click "📊 Export" → "Export All Slides (Combined PPTX)"
-- **Presentation**: Click "📊 Present" để mở chế độ trình chiếu
+### 3. Export files
+- **PDF**: Click "Export" → "Export All Slides (Combined PDF)"
+- **PPTX**: Click "Export" → "Export All Slides (Combined PPTX)"
+- **Presentation**: Click "Present" to open presentation mode
 
-### 4. Chế độ trình chiếu
-- Sử dụng phím mũi tên để điều hướng
-- F11 hoặc double-click để fullscreen
-- ESC để thoát
+### 4. Presentation mode
+- Use arrow keys to navigate
+- F11 or double-click for fullscreen
+- ESC to exit
 
-## 🔧 Cấu hình nâng cao
+## Advanced Configuration
 
-### Tùy chỉnh AI Models
-Trong `models/LLMs.py`:
+### Customize AI Models
+In `models/LLMs.py`:
 ```python
-# Thay đổi mô hình mặc định
-LLM = Gemini()  # Hoặc Claude_3_7_Sonnet(), GPT_4o()
+# Change default model
+LLM = Gemini()  # Or Claude_3_7_Sonnet(), GPT_4o()
 
-# Cấu hình fallback
+# Configure fallbacks
 LLM_FALLBACKS = [
     ("Claude", LLM_CLAUDE),
     ("Gemini", LLM_GEMINI),
@@ -171,38 +171,38 @@ LLM_FALLBACKS = [
 ]
 ```
 
-### Tùy chỉnh Design Rules
-Chỉnh sửa `rules/html.txt` và `rules/instruction.txt` để thay đổi style và guidelines cho AI.
+### Customize Design Rules
+Edit `rules/html.txt` and `rules/instruction.txt` to change styles and guidelines for AI.
 
-### Cấu hình Export
+### Configure Export
 ```python
 # PDF Export settings (utils/pdf_export.py)
 export_slides_to_pdf(
     slide_files=files,
-    method="playwright",  # hoặc "weasyprint"
+    method="playwright",  # or "weasyprint"
     combine=True
 )
 
-# PPTX Export (yêu cầu ConvertAPI key)
+# PPTX Export (requires ConvertAPI key)
 convert_pdf_to_pptx(pdf_path, output_dir, filename)
 ```
 
-## 🔍 API Endpoints
+## API Endpoints
 
 ### REST API
 - `GET /` - Main interface
-- `GET /export_pdf/all` - Xuất PDF tất cả slides
-- `GET /export_pdf/<slide_number>` - Xuất PDF slide cụ thể
-- `GET /convert_all_slides_to_pptx` - Xuất PPTX tất cả slides
-- `GET /api/slides/available` - Danh sách slides có sẵn
+- `GET /export_pdf/all` - Export PDF of all slides
+- `GET /export_pdf/<slide_number>` - Export PDF of specific slide
+- `GET /convert_all_slides_to_pptx` - Export PPTX of all slides
+- `GET /api/slides/available` - List of available slides
 
 ### Socket.IO Events
-- `send_message` - Gửi tin nhắn từ user
-- `slide_generated` - Nhận slide mới được tạo
-- `text_updated` - Cập nhật text slide
-- `ai_edit_slide` - Chỉnh sửa slide với AI
+- `send_message` - Send message from user
+- `slide_generated` - Receive newly generated slide
+- `text_updated` - Update slide text
+- `ai_edit_slide` - Edit slide with AI
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Test PDF export
@@ -212,56 +212,108 @@ python -m utils.pdf_export
 python -m utils.tools
 ```
 
-## 📊 Monitoring & Tracing
+## Monitoring & Tracing
 
-Ứng dụng tích hợp **Langfuse** để theo dõi:
-- AI model usage và performance
+The application integrates **Langfuse** to monitor:
+- AI model usage and performance
 - Workflow execution traces
-- Token usage và costs
+- Token usage and costs
 - Error tracking
 
-## 🔒 Bảo mật
+## Security
 
-- Environment variables cho API keys
-- Input validation và sanitization
-- Rate limiting cho AI calls
+- Environment variables for API keys
+- Input validation and sanitization
+- Rate limiting for AI calls
 - Secure file handling
 
-## 📈 Performance
+## Performance
 
-- **Parallel tool calls** để tăng tốc
-- **Streaming responses** cho UX tốt hơn
-- **LLM fallback** để đảm bảo availability
-- **Caching** color palettes giữa slides
+- **Parallel tool calls** to increase speed
+- **Streaming responses** for better UX
+- **LLM fallback** to ensure availability
+- **Caching** color palettes between slides
 
-## 🤝 Đóng góp
+## Contributing
 
 1. Fork repository
-2. Tạo feature branch: `git checkout -b feature/new-feature`
+2. Create feature branch: `git checkout -b feature/new-feature`
 3. Commit changes: `git commit -m 'Add new feature'`
 4. Push to branch: `git push origin feature/new-feature`
-5. Tạo Pull Request
+5. Create Pull Request
 
-## 📄 License
+## License
 
-MIT License - xem file [LICENSE](LICENSE) để biết thêm chi tiết.
+MIT License - see [LICENSE](LICENSE) file for more details.
 
-## 🆘 Hỗ trợ
+## Support
 
-Nếu gặp vấn đề:
-1. Kiểm tra logs trong console
-2. Xem file `workflow.log`
-3. Tạo issue với thông tin chi tiết
-4. Kiểm tra API keys và internet connection
+If you encounter issues:
+1. Check logs in the console
+2. View the `workflow.log` file
+3. Create an issue with detailed information
+4. Verify API keys and internet connection
 
-## 🚧 Roadmap
+## Examples
 
-- [ ] Hỗ trợ thêm mô hình AI
+Here are some examples of slide decks generated with AI Slide Generator:
+
+### Example 1: LLM Presentation with Sidebar Layout
+
+**Prompt:** "Create a presentation about LLM with sidebar layout"
+
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+  <div style="flex: 0 1 45%;">
+    <img src="images/result1/1.png" alt="Slide 1" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result1/2.png" alt="Slide 2" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result1/3.png" alt="Slide 3" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result1/4.png" alt="Slide 4" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result1/5.png" alt="Slide 5" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result1/6.png" alt="Slide 6" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result1/7.png" alt="Slide 7" style="width: 100%;">
+  </div>
+</div>
+
+### Example 2: LLM Trends 2025 with Dark Green Background
+
+**Prompt:** "Create a 5-slide presentation about LLM trends for 2025 with dark green background"
+
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+  <div style="flex: 0 1 45%;">
+    <img src="images/result2/1.png" alt="Slide 1" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result2/2.png" alt="Slide 2" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result2/3.png" alt="Slide 3" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result2/4.png" alt="Slide 4" style="width: 100%;">
+  </div>
+  <div style="flex: 0 1 45%;">
+    <img src="images/result2/5.png" alt="Slide 5" style="width: 100%;">
+  </div>
+</div>
+
+## Roadmap
+
+- [ ] Support for additional AI models
 - [ ] Template library
 - [ ] Collaboration features
 - [ ] Mobile responsive
 - [ ] Video export
 - [ ] Voice narration
-
-
 
